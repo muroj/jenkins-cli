@@ -47,6 +47,26 @@ func init() {
 	}
 }
 
+/*
+	Given a URL for a Jenkins job. Returns the job project name, and all parent.
+	For example, a job URL of "job/ai-foundation/job/abp-code-scan/job/ghenkins/"
+	will return (ghenkins, [ai-foundation, abp-code-scan])
+*/
+func parseJobURL(jobURL string) (string, []string, error) {
+	jobComponents := strings.Split(strings.TrimSpace(jobURL), "/")
+	var sanitizedJobPath = make([]string, 0, len(jobComponents))
+
+	for _, s := range jobComponents {
+		fmt.Println(s)
+		if s != "job" && s != "" && s != " " {
+			sanitizedJobPath = append(sanitizedJobPath, s)
+		}
+	}
+	jobName := sanitizedJobPath[len(sanitizedJobPath)-1]
+
+	return jobName, sanitizedJobPath[0 : len(sanitizedJobPath)-1], nil
+}
+
 func main() {
 
 	/*
@@ -59,52 +79,29 @@ func main() {
 	ctx := context.Background()
 	jenkins, err := gojenkins.CreateJenkins(nil, jenkinsURL, jenkinsUser, jenkinsAPIToken).Init(ctx)
 	if err != nil {
-		fmt.Println(err)
-		return
+		log.Fatalf("Failed to connect to Jenkins instance at \"%s\"\n %s", jenkinsURL, err)
 	}
 
-	// Get Last Successful Build for a Job
-	//job, err := jenkins.GetJob(ctx, "measure-docker-pull", "tron-test", "jmuro")
+	jobName, sanitizedJobPath, _ := parseJobURL(jobURL)
 
-	// Convert job path:
-	//job/ai-foundation/job/abp-code-scan/job/ghenkins/
-	// split on slashes
-	jobComponents := strings.Split(strings.TrimSpace(jobURL), "/")
-	var sanitizedJobPath = make([]string, 0, len(jobComponents))
-
-	for _, s := range jobComponents {
-		fmt.Println(s)
-		if s != "job" && s != "" && s != " " {
-			sanitizedJobPath = append(sanitizedJobPath, s)
-		}
-	}
-	jobName := sanitizedJobPath[len(sanitizedJobPath)-1]
-	// var jobParents []string = nil
-	// if len(jobComponents) > 1 {
-	// 	jobParents = jobComponents[0 : len(jobComponents)-2]
-	// 	sort.jobParents
-	// }
-	fmt.Printf("Retrieving job \"%s\" at path %v\n", jobName, sanitizedJobPath[0:len(sanitizedJobPath)-2])
-	job, err := jenkins.GetJob(ctx, jobName, sanitizedJobPath[0:len(jobComponents)-5]...)
-
+	log.Printf("Retrieving job \"%s\" at path %v\n", jobName, sanitizedJobPath)
+	job, err := jenkins.GetJob(ctx, jobName, sanitizedJobPath...)
 	if err != nil {
-		go panic(err)
+		log.Fatalf("Failed to retreive job with URL \"%s\"\n %s", jobURL, err)
 	}
-
-	fmt.Printf("Retrieving last successful build for %s\n", job.GetName())
 
 	var build *gojenkins.Build
 	if buildNumber == 0 {
+		log.Printf("Retrieving last successful build")
 		build, err = job.GetLastSuccessfulBuild(ctx)
 	} else {
+		log.Printf("Retrieving build %d\n", buildNumber)
 		build, err = job.GetBuild(ctx, buildNumber)
 	}
 
 	if err != nil {
-		panic(err)
+		log.Fatalf("Failed to retrieve build: %s", err)
 	}
-
-	fmt.Printf("Build Number: %d\n", build.GetBuildNumber())
 
 	// get build scheduled time
 	startTime := build.GetTimestamp()

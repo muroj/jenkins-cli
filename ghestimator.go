@@ -62,6 +62,11 @@ type BuildInfo struct {
 	hostNode           string
 }
 
+type InstanaMetric struct {
+	Name      string
+	Formatter func()
+}
+
 func main() {
 
 	buildInfo, err := getBuildInfo(buildNumber, jobURL, jenkinsURL, jenkinsUser, jenkinsAPIToken)
@@ -78,6 +83,7 @@ func main() {
 	if err != nil {
 		log.Fatalf("Failed to retrieve required build information: %s", err)
 	}
+
 }
 
 func getBuildInfo(id int64, jobURL string, jenkinsURL string, jenkinsUser string, jenkinsAPIToken string) (BuildInfo, error) {
@@ -136,6 +142,7 @@ func getHostMetrics(hostname string, hostMetrics []string, startTimeUnix int64, 
 	configuration := instana.NewConfiguration()
 	configuration.Host = instanaURL
 	configuration.BasePath = fmt.Sprintf("https://%s", configuration.Host)
+	configuration.Debug = true
 	client := instana.NewAPIClient(configuration)
 	authCtx := context.WithValue(context.Background(), instana.ContextAPIKey, instana.APIKey{
 		Key:    instanaAPIKey,
@@ -157,16 +164,88 @@ func getHostMetrics(hostname string, hostMetrics []string, startTimeUnix int64, 
 	}
 
 	metricsResult, _, err := client.InfrastructureMetricsApi.GetInfrastructureMetrics(authCtx, &infraMetricsOpts)
+
 	if err != nil {
-		return fmt.Errorf("Error retrieving instana metrics: %s", err)
+		return fmt.Errorf("Error retrieving host metrics: %s", err)
 	}
 
-	for _, metric := range metricsResult.Items {
-		fmt.Printf("Metric label: %s\nHost: %s\n", metric.Label, metric.Host)
-		for k, v := range metric.Metrics {
-			fmt.Printf("%s\n: %v\n", k, v)
+	fmt.Printf("Metrics:\n")
+	for _, m := range metricsResult.Items {
+		fmt.Printf("  label: %s\n  host: %s\n", m.Label, m.Host)
+		for k, v := range m.Metrics {
+			fmt.Printf("%s: \n", k)
+
+			var sum float32
+			var min float32 = math.MaxFloat32
+			var max float32 = math.SmallestNonzeroFloat32
+
+			for _, j := range v {
+				//t := int64(j[0])
+				//fmt.Printf(time.Unix(t/1000, 0).String())
+				//fmt.Printf("  %.2f ", j[1])
+
+				d := j[1]
+				sum += j[1]
+
+				if d > max {
+					max = d
+				}
+
+				if d < min {
+					min = d
+				}
+			}
+
+			switch k {
+			case "cpu.used":
+				{
+					fmt.Printf("  average=%.2f%% min=%.2f%%, max=%.2f%%\n", sum/float32(len(v))*100, min*100, max*100)
+				}
+			case "memory.used":
+				{
+					fmt.Printf("  average=%.2f%% min=%.2f%%, max=%.2f%%\n", sum/float32(len(v))*100, min*100, max*100)
+				}
+			case "load.1min":
+				{
+					fmt.Printf("  average=%.2f min=%.2f, max=%.2f\n", sum/float32(len(v)), min, max)
+				}
+			}
+
 		}
 	}
+
+	instanaSnapshotsOpts := instana.GetSnapshotsOpts{
+		Offline:    optional.NewBool(true),
+		Plugin:     optional.NewString("host"),
+		Query:      optional.NewString(fmt.Sprintf("entity.host.name:%s", hostname)),
+		To:         optional.NewInt64(startTimeUnix * 1000), // Instana API requires nanosecond resolution
+		WindowSize: optional.NewInt64(durationMs),
+		Size:       optional.NewInt32(10),
+	}
+
+	snapshots, _, err := client.InfrastructureResourcesApi.GetSnapshots(authCtx, &instanaSnapshotsOpts)
+
+	if err != nil {
+		return fmt.Errorf("Failed to search snapshots: %s", err)
+	}
+
+	fmt.Printf("Snapshots:  ")
+	for _, s := range snapshots.Items {
+		fmt.Printf("  host: %s\n  label: %s\n  id: %s\n", s.Host, s.Label, s.SnapshotId)
+	}
+
+	// instanaSnapshotOpts := instana.GetSnapshotOpts{
+	// 	To:         optional.NewInt64(startTimeUnix * 1000), // Instana API requires nanosecond resolution
+	// 	WindowSize: optional.NewInt64(durationMs),
+	// }
+	snapshot, _, err := client.InfrastructureResourcesApi.GetSnapshot(authCtx, snapshots.Items[0].SnapshotId, nil)
+
+	if err != nil {
+		return fmt.Errorf("Failed to retrieve snapshot: %s", err)
+	}
+
+	fmt.Printf("instana.SnapshotItem: %v\n", snapshot)
+
 	return nil
 }
 

@@ -145,16 +145,14 @@ func getHostMetrics(hostname string, hostMetrics []string, startTimeUnix int64, 
 	infraMetricsOpts := instana.GetInfrastructureMetricsOpts{
 		Offline: optional.EmptyBool(),
 		GetCombinedMetrics: optional.NewInterface(instana.GetCombinedMetrics{
-			Metrics: []string{
-				"cpu.used", "load.1min", "memory.used",
-			},
-			Plugin: "host",
-			Query:  fmt.Sprintf("entity.host.name:%s", hostname),
+			Metrics: hostMetrics,
+			Plugin:  "host",
+			Query:   fmt.Sprintf("entity.host.name:%s", hostname),
 			TimeFrame: instana.TimeFrame{
-				To:         startTimeUnix * 1000, // API requires nanosecond resolution
+				To:         startTimeUnix * 1000, // Instana API requires nanosecond resolution
 				WindowSize: durationMs,
 			},
-			Rollup: computeRollupPeriod(startTimeUnix, durationMs),
+			Rollup: computeRollupValue(startTimeUnix, durationMs),
 		}),
 	}
 
@@ -173,39 +171,39 @@ func getHostMetrics(hostname string, hostMetrics []string, startTimeUnix int64, 
 }
 
 /*
-	The number of data points returned per metric is limited to 600. Therefore, the granularity must be adjusted based on the build duration.
-	Instana refers to the granularity as the rollup. See: https://instana.github.io/openapi/#tag/Infrastructure-Metrics
+	The number of data points returned per metric is limited to 600. Therefore, the rollup parameter (i.e. granularity) must be adjusted based on the build duration.
+	See: https://instana.github.io/openapi/#tag/Infrastructure-Metrics
 
 	Builds older than 24 hours are limited to a maximum granularity of 1 minute (see https://www.instana.com/docs/policies/#data-retention-policy)
 	This means if the build is short (e.g. <5 minutes), it may make sense to expand the time frame to get more metrics.
 	Builds run within the last 24 hours benefit from 1 or 5 second granularity.
 
 */
-func computeRollupPeriod(startTimeUnix int64, durationMs int64) int32 {
+func computeRollupValue(buildStartTimeUnix int64, buildDurationMs int64) int32 {
 	MaxDataPoints := 600
-	var RollUpPeriodsSeconds []int
+	var RollUpValuesSeconds []int
 
-	hours := int(math.Floor(time.Now().Sub(time.Unix(startTimeUnix, 0)).Hours()))
-	seconds := int(durationMs / 1000)
+	hoursSince := int(math.Floor(time.Now().Sub(time.Unix(buildStartTimeUnix, 0)).Hours()))
+	buildDurationSeconds := int(buildDurationMs / 1000)
 
-	if hours < 24 {
-		RollUpPeriodsSeconds = []int{1, 5, 60, 300, 3600}
+	if hoursSince < 24 {
+		RollUpValuesSeconds = []int{1, 5, 60, 300, 3600}
 	} else {
-		RollUpPeriodsSeconds = []int{60, 300, 3600}
+		RollUpValuesSeconds = []int{60, 300, 3600}
 	}
 
-	for _, period := range RollUpPeriodsSeconds {
-		if int(seconds/period) < MaxDataPoints {
-			return int32(period)
+	for _, rollup := range RollUpValuesSeconds {
+		if int(buildDurationSeconds/rollup) < MaxDataPoints {
+			return int32(rollup)
 		}
 	}
 	return 1
 }
 
 /*
-	Given a URL for a Jenkins job. Returns the job name, and parent folders.
-	For example, a job URL of "job/ai-foundation/job/abp-code-scan/job/ghenkins/"
-	will return (ghenkins, [ai-foundation, abp-code-scan])
+	Given a URL for a Jenkins job. Returns the job name and a slice of the parent folder names.
+	For example, a job URL of "job/ai-foundation/job/abp-code-scan/job/ghenkins/" will return (ghenkins, [ai-foundation, abp-code-scan]).
+	This is the format expected by the golang Jenkins API.
 */
 func parseJobURL(jobURL string) (string, []string, error) {
 	jobURLTrimmed := strings.TrimRight(strings.TrimSpace(jobURL), "/")

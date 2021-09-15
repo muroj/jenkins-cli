@@ -29,6 +29,31 @@ var (
 	instanaAPIKey   string
 )
 
+func main() {
+
+	jenkinsCreds := JenkinsCredentials{
+		Username: jenkinsUser,
+		APIToken: jenkinsAPIToken,
+	}
+	jenkinsClient := newJenkinsClient(jenkinsURL, jenkinsCreds)
+	buildInfo, err := getJenkinsBuildInfo(jobURL, buildNumber, jenkinsClient)
+
+	if err != nil {
+		log.Fatalf("Failed to retrieve required build information: %s", err)
+	}
+
+	buildInfo.printBuildInfo()
+
+	hostMetrics := []string{
+		"cpu.used", "load.1min", "memory.used",
+	}
+	instanaURL := fmt.Sprintf("%s-%s.instana.io", instanaTenant, instanaUnit)
+	err = getHostMetrics(buildInfo.AgentHostMachine, hostMetrics, buildInfo.CompletedTimeUnix, buildInfo.DurationMs, instanaURL, instanaAPIKey)
+	if err != nil {
+		log.Fatalf("Failed to retrieve required build information: %s", err)
+	}
+}
+
 /* Parse command-line arguments */
 func init() {
 	flag.StringVar(&jenkinsURL, "jenkinsURL", "https://ghenkins.bigdatalab.ibm.com/", "URL of the Jenkins host, e.g. \"https://ghenkins.bigdatalab.ibm.com/\"")
@@ -52,7 +77,7 @@ func init() {
 	}
 }
 
-type GhenkinsBuildInfo struct {
+type JenkinsBuildInfo struct {
 	Name               string
 	Id                 int64
 	ScheduledTimestamp time.Time
@@ -60,85 +85,120 @@ type GhenkinsBuildInfo struct {
 	CompletedTimeUnix  int64
 	DurationMs         int64
 	ExecutionTimeMs    int64
-	HostPickle         string
+	AgentHostMachine   string
 }
 
-func (bi *GhenkinsBuildInfo) printBuildInfo() {
-	fmt.Printf("Build ran on: %s\n", bi.HostPickle)
+func (bi *JenkinsBuildInfo) printBuildInfo() {
+	fmt.Printf("Build ran on: %s\n", bi.AgentHostMachine)
 	fmt.Printf("Build started: %s\n", bi.ScheduledTimestamp.String())
 	fmt.Printf("Build ended: %s\n", time.Unix(bi.CompletedTimeUnix, 0))
 	fmt.Printf("Build duration (ms): %d\n", bi.DurationMs)
 	fmt.Printf("Execution Time (ms): %d\n", bi.ExecutionTimeMs)
 }
 
-type InstanaMetric struct {
-	Name      string
-	Formatter func()
+type JenkinsAPIClient struct {
+	Client    *gojenkins.Jenkins
+	Creds     JenkinsCredentials
+	Context   context.Context
+	DebugMode bool
 }
 
-func main() {
-
-	buildInfo, err := getBuildInfo(buildNumber, jobURL, jenkinsURL, jenkinsUser, jenkinsAPIToken)
-	if err != nil {
-		log.Fatalf("Failed to retrieve required build information: %s", err)
-	}
-	buildInfo.printBuildInfo()
-
-	hostMetrics := []string{
-		"cpu.used", "load.1min", "memory.used",
-	}
-	instanaURL := fmt.Sprintf("%s-%s.instana.io", instanaTenant, instanaUnit)
-	err = getHostMetrics(buildInfo.HostPickle, hostMetrics, buildInfo.CompletedTimeUnix, buildInfo.DurationMs, instanaURL, instanaAPIKey)
-	if err != nil {
-		log.Fatalf("Failed to retrieve required build information: %s", err)
-	}
+type JenkinsCredentials struct {
+	Username string
+	APIToken string
 }
 
-func getBuildInfo(id int64, jobURL string, jenkinsURL string, jenkinsUser string, jenkinsAPIToken string) (GhenkinsBuildInfo, error) {
-	var bi GhenkinsBuildInfo
+func newJenkinsClient(jenkinsURL string, creds JenkinsCredentials) *JenkinsAPIClient {
+	log.Printf("Initializing Jenkins client")
 
-	log.Println("Initializing Jenkins client")
+	jenkinsClient := JenkinsAPIClient{
+		DebugMode: false,
+	}
 	ctx := context.WithValue(context.Background(), "debug", nil)
-	j, err := gojenkins.CreateJenkins(nil, jenkinsURL, jenkinsUser, jenkinsAPIToken).Init(ctx)
+	jenkins, err := gojenkins.CreateJenkins(nil, jenkinsURL, creds.Username, creds.APIToken).Init(ctx)
 	if err != nil {
 		log.Fatalf("Failed to connect to Jenkins instance at \"%s\"\n %s", jenkinsURL, err)
 	}
 
+	jenkinsClient.Client = jenkins
+	jenkinsClient.Context = ctx
+
+	return &jenkinsClient
+}
+
+func getJenkinsBuildInfo(jobURL string, id int64, jc *JenkinsAPIClient) (JenkinsBuildInfo, error) {
+	var buildInfo JenkinsBuildInfo
+
 	log.Printf("Retrieving job at URL: \"%s\"", jobURL)
 	jobName, path, _ := parseJobURL(jobURL)
-	job, err := j.GetJob(ctx, jobName, path...)
+	job, err := jc.Client.GetJob(jc.Context, jobName, path...)
 	if err != nil {
-		return bi, fmt.Errorf("Failed to retreive job with URL \"%s\"\n %s", jobURL, err)
+		return buildInfo, fmt.Errorf("Failed to retreive job with URL \"%s\"\n %s", jobURL, err)
 	}
 
-	var b *gojenkins.Build
+	var build *gojenkins.Build
 	if id == 0 {
 		log.Printf("Retrieving last successful build")
-		b, err = job.GetLastSuccessfulBuild(ctx)
+		build, err = job.GetLastSuccessfulBuild(jc.Context)
 	} else {
 		log.Printf("Retrieving build %d\n", id)
-		b, err = job.GetBuild(ctx, id)
+		build, err = job.GetBuild(jc.Context, id)
 	}
 
 	if err != nil {
-		return bi, fmt.Errorf("Failed to retrieve build: %s", err)
+		return buildInfo, fmt.Errorf("Failed to retrieve build: %s", err)
 	}
 
-	bi.ScheduledTimestamp = b.GetTimestamp()
-	bi.DurationMs = int64(math.Round(b.GetDuration()))
-	bi.CompletedTimeUnix = bi.ScheduledTimestamp.Unix() + (int64(bi.DurationMs) / 1000)
-	//bi.ExecutionTimeMs = b.GetExecutionTimeMs()
+	buildInfo.ScheduledTimestamp = build.GetTimestamp()
+	buildInfo.DurationMs = int64(math.Round(build.GetDuration()))
+	buildInfo.CompletedTimeUnix = buildInfo.ScheduledTimestamp.Unix() + (int64(buildInfo.DurationMs) / 1000)
+	buildInfo.ExecutionTimeMs = build.GetExecutionTimeMs()
+	buildInfo.AgentHostMachine, err = findBuildHostMachineName(build, jc)
 
-	// Determine which node the build ran on.
-	bl := b.GetConsoleOutput(ctx)
+	if err != nil {
+		return buildInfo, fmt.Errorf("Could not determine build agent name.")
+	}
+
+	return buildInfo, nil
+}
+
+/*
+	Returns a string indicating the hostname of the machine where this build ran.
+*/
+func findBuildHostMachineName(build *gojenkins.Build, jc *JenkinsAPIClient) (string, error) {
+	buildLog := build.GetConsoleOutput(jc.Context)
 	r, _ := regexp.Compile(`Running on \b([\w]+\b)`)
-	m := r.FindStringSubmatch(bl)
+	m := r.FindStringSubmatch(buildLog)
 	if m == nil {
-		return bi, fmt.Errorf("Unable to determine host node: \"Running on <nodeName>\" line not found in build log.")
+		return "", fmt.Errorf("Unable to determine host node: \"Running on <nodeName>\" line not found in build log.")
 	}
-	bi.HostPickle = m[1]
 
-	return bi, nil
+	return m[1], nil
+}
+
+/*
+	Given a URL for a Jenkins job. Returns the job name and a slice of the parent folder names.
+	For example, a job URL of "job/ai-foundation/job/abp-code-scan/job/ghenkins/" will return (ghenkins, [ai-foundation, abp-code-scan]).
+	This is the format expected by the golang Jenkins API.
+*/
+func parseJobURL(jobURL string) (string, []string, error) {
+	jobURLTrimmed := strings.TrimRight(strings.TrimSpace(jobURL), "/")
+	path, name := path.Split(jobURLTrimmed)
+	segments := strings.Split(path, "/")
+
+	parentIds := make([]string, 0)
+	for _, s := range segments {
+		if s != "job" && s != "" && s != " " {
+			parentIds = append(parentIds, s)
+		}
+	}
+
+	return name, parentIds, nil
+}
+
+type InstanaMetric struct {
+	Name      string
+	Formatter func()
 }
 
 func getHostMetrics(hostname string, hostMetrics []string, startTimeUnix int64, durationMs int64, instanaURL string, instanaAPIKey string) error {
@@ -285,24 +345,4 @@ func computeRollupValue(buildStartTimeUnix int64, buildDurationMs int64) int32 {
 		}
 	}
 	return 1
-}
-
-/*
-	Given a URL for a Jenkins job. Returns the job name and a slice of the parent folder names.
-	For example, a job URL of "job/ai-foundation/job/abp-code-scan/job/ghenkins/" will return (ghenkins, [ai-foundation, abp-code-scan]).
-	This is the format expected by the golang Jenkins API.
-*/
-func parseJobURL(jobURL string) (string, []string, error) {
-	jobURLTrimmed := strings.TrimRight(strings.TrimSpace(jobURL), "/")
-	path, name := path.Split(jobURLTrimmed)
-	segments := strings.Split(path, "/")
-
-	parentIds := make([]string, 0)
-	for _, s := range segments {
-		if s != "job" && s != "" && s != " " {
-			parentIds = append(parentIds, s)
-		}
-	}
-
-	return name, parentIds, nil
 }

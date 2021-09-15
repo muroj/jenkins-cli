@@ -4,6 +4,7 @@ import (
 	"context"
 	"flag"
 	"fmt"
+	"instana/openapi"
 	"log"
 	"math"
 	"path"
@@ -11,10 +12,9 @@ import (
 	"strings"
 	"time"
 
-	instana "instana/openapi"
-
 	"github.com/antihax/optional"
 	"github.com/muroj/gojenkins"
+	"github.ibm.com/jmuro/ghestimator/pkg/instana"
 )
 
 /* Command-line arguments */
@@ -45,7 +45,7 @@ func main() {
 	buildInfo.printBuildInfo()
 
 	instanaURL := fmt.Sprintf("%s-%s.instana.io", instanaTenant, instanaUnit)
-	instanaClient := newInstanaClient(instanaURL, InstanaCredentials{instanaAPIKey})
+	instanaClient := instana.NewInstanaClient(instanaURL, instana.InstanaCredentials{instanaAPIKey})
 	hostMetrics := []string{
 		"cpu.used", "load.1min", "memory.used",
 	}
@@ -206,52 +206,15 @@ func parseJobURL(jobURL string) (string, []string, error) {
 	return name, parentIds, nil
 }
 
-type InstanaMetric struct {
-	Name      string
-	Formatter func()
-}
+func getResourceUsage(buildInfo *JenkinsBuildInfo, hostMetrics []string, ic *instana.InstanaAPIClient) error {
 
-type InstanaAPIClient struct {
-	Client    *instana.APIClient
-	Creds     InstanaCredentials
-	Context   context.Context
-	DebugMode bool
-}
-
-type InstanaCredentials struct {
-	APIToken string
-}
-
-func newInstanaClient(instanaURL string, creds InstanaCredentials) *InstanaAPIClient {
-	log.Printf("Initializing Instana client")
-
-	conf := instana.NewConfiguration()
-	conf.Host = instanaURL
-	conf.BasePath = fmt.Sprintf("https://%s", conf.Host)
-	conf.Debug = false
-	iac := instana.NewAPIClient(conf)
-
-	authCtx := context.WithValue(context.Background(), instana.ContextAPIKey, instana.APIKey{
-		Key:    instanaAPIKey,
-		Prefix: "apiToken",
-	})
-
-	var client InstanaAPIClient
-	client.Client = iac
-	client.Context = authCtx
-
-	return &client
-}
-
-func getResourceUsage(buildInfo *JenkinsBuildInfo, hostMetrics []string, ic *InstanaAPIClient) error {
-
-	infraMetricsOpts := instana.GetInfrastructureMetricsOpts{
+	infraMetricsOpts := openapi.GetInfrastructureMetricsOpts{
 		Offline: optional.EmptyBool(),
-		GetCombinedMetrics: optional.NewInterface(instana.GetCombinedMetrics{
+		GetCombinedMetrics: optional.NewInterface(openapi.GetCombinedMetrics{
 			Metrics: hostMetrics,
 			Plugin:  "host",
 			Query:   fmt.Sprintf("entity.host.name:%s", buildInfo.AgentHostMachine),
-			TimeFrame: instana.TimeFrame{
+			TimeFrame: openapi.TimeFrame{
 				To:         buildInfo.ScheduledTimeUnix * 1000, // Instana API requires nanosecond resolution
 				WindowSize: buildInfo.DurationMs,
 			},
@@ -310,7 +273,7 @@ func getResourceUsage(buildInfo *JenkinsBuildInfo, hostMetrics []string, ic *Ins
 		}
 	}
 
-	instanaSnapshotsOpts := instana.GetSnapshotsOpts{
+	instanaSnapshotsOpts := openapi.GetSnapshotsOpts{
 		Offline:    optional.NewBool(true),
 		Plugin:     optional.NewString("host"),
 		Query:      optional.NewString(fmt.Sprintf("entity.host.name:%s", buildInfo.AgentHostMachine)),
@@ -330,7 +293,7 @@ func getResourceUsage(buildInfo *JenkinsBuildInfo, hostMetrics []string, ic *Ins
 		fmt.Printf("  host: %s\n  label: %s\n  id: %s\n", s.Host, s.Label, s.SnapshotId)
 	}
 
-	instanaSnapshotOpts := instana.GetSnapshotOpts{
+	instanaSnapshotOpts := openapi.GetSnapshotOpts{
 		To:         optional.NewInt64(buildInfo.CompletedTimeUnix * 1000), // Instana API requires nanosecond resolution
 		WindowSize: optional.NewInt64(buildInfo.DurationMs),
 	}

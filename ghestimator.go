@@ -14,7 +14,7 @@ import (
 	instana "instana/openapi"
 
 	"github.com/antihax/optional"
-	"github.com/bndr/gojenkins"
+	"github.com/muroj/gojenkins"
 )
 
 /* Command-line arguments */
@@ -52,14 +52,23 @@ func init() {
 	}
 }
 
-type BuildInfo struct {
+type GhenkinsBuildInfo struct {
 	Name               string
 	Id                 int64
-	scheduledTimestamp time.Time
-	scheduledTimeUnix  int64
-	completedTimeUnix  int64
-	durationMs         int64
-	hostNode           string
+	ScheduledTimestamp time.Time
+	ScheduledTimeUnix  int64
+	CompletedTimeUnix  int64
+	DurationMs         int64
+	ExecutionTimeMs    int64
+	HostPickle         string
+}
+
+func (bi *GhenkinsBuildInfo) printBuildInfo() {
+	fmt.Printf("Build ran on: %s\n", bi.HostPickle)
+	fmt.Printf("Build started: %s\n", bi.ScheduledTimestamp.String())
+	fmt.Printf("Build ended: %s\n", time.Unix(bi.CompletedTimeUnix, 0))
+	fmt.Printf("Build duration (ms): %d\n", bi.DurationMs)
+	fmt.Printf("Execution Time (ms): %d\n", bi.ExecutionTimeMs)
 }
 
 type InstanaMetric struct {
@@ -79,18 +88,17 @@ func main() {
 		"cpu.used", "load.1min", "memory.used",
 	}
 	instanaURL := fmt.Sprintf("%s-%s.instana.io", instanaTenant, instanaUnit)
-	err = getHostMetrics(buildInfo.hostNode, hostMetrics, buildInfo.completedTimeUnix, buildInfo.durationMs, instanaURL, instanaAPIKey)
+	err = getHostMetrics(buildInfo.HostPickle, hostMetrics, buildInfo.CompletedTimeUnix, buildInfo.DurationMs, instanaURL, instanaAPIKey)
 	if err != nil {
 		log.Fatalf("Failed to retrieve required build information: %s", err)
 	}
-
 }
 
-func getBuildInfo(id int64, jobURL string, jenkinsURL string, jenkinsUser string, jenkinsAPIToken string) (BuildInfo, error) {
-	var bi BuildInfo
+func getBuildInfo(id int64, jobURL string, jenkinsURL string, jenkinsUser string, jenkinsAPIToken string) (GhenkinsBuildInfo, error) {
+	var bi GhenkinsBuildInfo
 
 	log.Println("Initializing Jenkins client")
-	ctx := context.Background()
+	ctx := context.WithValue(context.Background(), "debug", nil)
 	j, err := gojenkins.CreateJenkins(nil, jenkinsURL, jenkinsUser, jenkinsAPIToken).Init(ctx)
 	if err != nil {
 		log.Fatalf("Failed to connect to Jenkins instance at \"%s\"\n %s", jenkinsURL, err)
@@ -116,13 +124,10 @@ func getBuildInfo(id int64, jobURL string, jenkinsURL string, jenkinsUser string
 		return bi, fmt.Errorf("Failed to retrieve build: %s", err)
 	}
 
-	bi.scheduledTimestamp = b.GetTimestamp()
-	bi.durationMs = int64(math.Round(b.GetDuration()))
-	// get build execution time
-	//executionTimeMs := lsb.GetDuration()
-	//println(executionTimeMs)
-
-	bi.completedTimeUnix = bi.scheduledTimestamp.Unix() + (int64(bi.durationMs) / 1000)
+	bi.ScheduledTimestamp = b.GetTimestamp()
+	bi.DurationMs = int64(math.Round(b.GetDuration()))
+	bi.CompletedTimeUnix = bi.ScheduledTimestamp.Unix() + (int64(bi.DurationMs) / 1000)
+	//bi.ExecutionTimeMs = b.GetExecutionTimeMs()
 
 	// Determine which node the build ran on.
 	bl := b.GetConsoleOutput(ctx)
@@ -131,7 +136,7 @@ func getBuildInfo(id int64, jobURL string, jenkinsURL string, jenkinsUser string
 	if m == nil {
 		return bi, fmt.Errorf("Unable to determine host node: \"Running on <nodeName>\" line not found in build log.")
 	}
-	bi.hostNode = m[1]
+	bi.HostPickle = m[1]
 
 	return bi, nil
 }
@@ -171,7 +176,7 @@ func getHostMetrics(hostname string, hostMetrics []string, startTimeUnix int64, 
 
 	fmt.Printf("Metrics:\n")
 	for _, m := range metricsResult.Items {
-		fmt.Printf("  label: %s\n  host: %s\n", m.Label, m.Host)
+		//fmt.Printf("  label: %s\n  host: %s\n", m.Label, m.Host)
 		for k, v := range m.Metrics {
 			fmt.Printf("%s: \n", k)
 
@@ -234,17 +239,20 @@ func getHostMetrics(hostname string, hostMetrics []string, startTimeUnix int64, 
 		fmt.Printf("  host: %s\n  label: %s\n  id: %s\n", s.Host, s.Label, s.SnapshotId)
 	}
 
-	// instanaSnapshotOpts := instana.GetSnapshotOpts{
-	// 	To:         optional.NewInt64(startTimeUnix * 1000), // Instana API requires nanosecond resolution
-	// 	WindowSize: optional.NewInt64(durationMs),
-	// }
-	snapshot, _, err := client.InfrastructureResourcesApi.GetSnapshot(authCtx, snapshots.Items[0].SnapshotId, nil)
+	instanaSnapshotOpts := instana.GetSnapshotOpts{
+		To:         optional.NewInt64(startTimeUnix * 1000), // Instana API requires nanosecond resolution
+		WindowSize: optional.NewInt64(durationMs),
+	}
+	snapshot, _, err := client.InfrastructureResourcesApi.GetSnapshot(authCtx, snapshots.Items[0].SnapshotId, &instanaSnapshotOpts)
 
 	if err != nil {
 		return fmt.Errorf("Failed to retrieve snapshot: %s", err)
 	}
 
-	fmt.Printf("instana.SnapshotItem: %v\n", snapshot)
+	nCPUs := int64(snapshot.Data["cpu.count"].(float64))
+	memBytes := int64(snapshot.Data["memory.total"].(float64))
+
+	fmt.Printf("CPUs: %d\nMemory: %d", nCPUs, memBytes)
 
 	return nil
 }
@@ -297,11 +305,4 @@ func parseJobURL(jobURL string) (string, []string, error) {
 	}
 
 	return name, parentIds, nil
-}
-
-func (bi *BuildInfo) printBuildInfo() {
-	fmt.Printf("Build started: %s\n", bi.scheduledTimestamp.String())
-	fmt.Printf("Build ended: %s\n", time.Unix(bi.completedTimeUnix, 0))
-	fmt.Printf("Build duration (ms): %d\n", bi.durationMs)
-	fmt.Printf("Build ran on: %s\n", bi.hostNode)
 }

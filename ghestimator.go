@@ -4,7 +4,6 @@ import (
 	"context"
 	"flag"
 	"fmt"
-	"instana/openapi"
 	"log"
 	"math"
 	"path"
@@ -12,7 +11,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/antihax/optional"
 	"github.com/muroj/gojenkins"
 	"github.ibm.com/jmuro/ghestimator/pkg/instana"
 )
@@ -27,6 +25,7 @@ var (
 	instanaTenant   string
 	instanaUnit     string
 	instanaAPIKey   string
+	enableDebug     bool
 )
 
 func main() {
@@ -35,7 +34,7 @@ func main() {
 		Username: jenkinsUser,
 		APIToken: jenkinsAPIToken,
 	}
-	jenkinsClient := newJenkinsClient(jenkinsURL, jenkinsCreds)
+	jenkinsClient := newJenkinsClient(jenkinsURL, jenkinsCreds, enableDebug)
 	buildInfo, err := getJenkinsBuildInfo(jobURL, buildNumber, jenkinsClient)
 
 	if err != nil {
@@ -45,12 +44,9 @@ func main() {
 	buildInfo.printBuildInfo()
 
 	instanaURL := fmt.Sprintf("%s-%s.instana.io", instanaTenant, instanaUnit)
-	instanaClient := instana.NewInstanaClient(instanaURL, instana.InstanaCredentials{instanaAPIKey})
-	hostMetrics := []string{
-		"cpu.used", "load.1min", "memory.used",
-	}
+	instanaClient := instana.NewInstanaClient(instanaURL, instana.InstanaCredentials{instanaAPIKey}, enableDebug)
 
-	err = getResourceUsage(&buildInfo, hostMetrics, instanaClient)
+	err = getResourceUsage(&buildInfo, instanaClient)
 	if err != nil {
 		log.Fatalf("Failed to retrieve required build information: %s", err)
 	}
@@ -66,6 +62,7 @@ func init() {
 	flag.StringVar(&instanaTenant, "instanaTenant", "tron", "Instana Tentant")
 	flag.StringVar(&instanaUnit, "instanaUnit", "ibmdataaiwai", "Instana Unit")
 	flag.StringVar(&instanaAPIKey, "instanaAPIKey", "", "Instana API key")
+	flag.BoolVar(&enableDebug, "debug", false, "Enable debug output")
 	flag.Parse()
 
 	if len(jenkinsUser) == 0 {
@@ -115,13 +112,18 @@ type JenkinsCredentials struct {
 	APIToken string
 }
 
-func newJenkinsClient(jenkinsURL string, creds JenkinsCredentials) *JenkinsAPIClient {
+func newJenkinsClient(jenkinsURL string, creds JenkinsCredentials, debug bool) *JenkinsAPIClient {
 	log.Printf("Initializing Jenkins client")
 
-	jenkinsClient := JenkinsAPIClient{
-		DebugMode: false,
+	var jenkinsClient JenkinsAPIClient
+	var ctx context.Context
+
+	if enableDebug {
+		ctx = context.WithValue(context.Background(), "debug", "debug")
+	} else {
+		ctx = context.WithValue(context.Background(), "debug", nil)
 	}
-	ctx := context.WithValue(context.Background(), "debug", nil)
+
 	jenkins, err := gojenkins.CreateJenkins(nil, jenkinsURL, creds.Username, creds.APIToken).Init(ctx)
 	if err != nil {
 		log.Fatalf("Failed to connect to Jenkins instance at \"%s\"\n %s", jenkinsURL, err)
@@ -206,137 +208,27 @@ func parseJobURL(jobURL string) (string, []string, error) {
 	return name, parentIds, nil
 }
 
-func getResourceUsage(buildInfo *JenkinsBuildInfo, hostMetrics []string, ic *instana.InstanaAPIClient) error {
+func getResourceUsage(buildInfo *JenkinsBuildInfo, instanaClient *instana.InstanaAPIClient) error {
 
-	infraMetricsOpts := openapi.GetInfrastructureMetricsOpts{
-		Offline: optional.EmptyBool(),
-		GetCombinedMetrics: optional.NewInterface(openapi.GetCombinedMetrics{
-			Metrics: hostMetrics,
-			Plugin:  "host",
-			Query:   fmt.Sprintf("entity.host.name:%s", buildInfo.AgentHostMachine),
-			TimeFrame: openapi.TimeFrame{
-				To:         buildInfo.ScheduledTimeUnix * 1000, // Instana API requires nanosecond resolution
-				WindowSize: buildInfo.DurationMs,
-			},
-			Rollup: computeRollupValue(buildInfo.CompletedTimeUnix, buildInfo.DurationMs),
-		}),
+	hostMetrics := []string{
+		"cpu.used", "load.1min", "memory.used",
 	}
 
-	metricsResult, _, err := ic.Client.InfrastructureMetricsApi.GetInfrastructureMetrics(ic.Context, &infraMetricsOpts)
+	err := instana.GetHostConfiguration(buildInfo.AgentHostMachine, buildInfo.CompletedTimeUnix, buildInfo.ExecutionTimeMs, instanaClient)
+
+	if err != nil {
+		return fmt.Errorf("Error retrieving host configuration: %s", err)
+	}
+
+	metricsResult, err := instana.GetHostMetrics(buildInfo.AgentHostMachine, buildInfo.CompletedTimeUnix, buildInfo.ExecutionTimeMs, hostMetrics, instanaClient)
 
 	if err != nil {
 		return fmt.Errorf("Error retrieving host metrics: %s", err)
 	}
 
-	fmt.Printf("Metrics:\n")
-	for _, m := range metricsResult.Items {
-		//fmt.Printf("  label: %s\n  host: %s\n", m.Label, m.Host)
-		for k, v := range m.Metrics {
-			fmt.Printf("%s: \n", k)
-
-			var sum float32
-			var min float32 = math.MaxFloat32
-			var max float32 = math.SmallestNonzeroFloat32
-
-			for _, j := range v {
-				//t := int64(j[0])
-				//fmt.Printf(time.Unix(t/1000, 0).String())
-				//fmt.Printf("  %.2f ", j[1])
-
-				d := j[1]
-				sum += j[1]
-
-				if d > max {
-					max = d
-				}
-
-				if d < min {
-					min = d
-				}
-			}
-
-			switch k {
-			case "cpu.used":
-				{
-					fmt.Printf("  average=%.2f%% min=%.2f%%, max=%.2f%%\n", sum/float32(len(v))*100, min*100, max*100)
-				}
-			case "memory.used":
-				{
-					fmt.Printf("  average=%.2f%% min=%.2f%%, max=%.2f%%\n", sum/float32(len(v))*100, min*100, max*100)
-				}
-			case "load.1min":
-				{
-					fmt.Printf("  average=%.2f min=%.2f, max=%.2f\n", sum/float32(len(v)), min, max)
-				}
-			}
-
-		}
+	for _, m := range metricsResult {
+		m.PrintInstanaHostMetricResult()
 	}
-
-	instanaSnapshotsOpts := openapi.GetSnapshotsOpts{
-		Offline:    optional.NewBool(true),
-		Plugin:     optional.NewString("host"),
-		Query:      optional.NewString(fmt.Sprintf("entity.host.name:%s", buildInfo.AgentHostMachine)),
-		To:         optional.NewInt64(buildInfo.CompletedTimeUnix * 1000), // Instana API requires nanosecond resolution
-		WindowSize: optional.NewInt64(buildInfo.DurationMs),
-		Size:       optional.NewInt32(10),
-	}
-
-	snapshots, _, err := ic.Client.InfrastructureResourcesApi.GetSnapshots(ic.Context, &instanaSnapshotsOpts)
-
-	if err != nil {
-		return fmt.Errorf("Failed to search snapshots: %s", err)
-	}
-
-	fmt.Printf("Snapshots:  ")
-	for _, s := range snapshots.Items {
-		fmt.Printf("  host: %s\n  label: %s\n  id: %s\n", s.Host, s.Label, s.SnapshotId)
-	}
-
-	instanaSnapshotOpts := openapi.GetSnapshotOpts{
-		To:         optional.NewInt64(buildInfo.CompletedTimeUnix * 1000), // Instana API requires nanosecond resolution
-		WindowSize: optional.NewInt64(buildInfo.DurationMs),
-	}
-	snapshot, _, err := ic.Client.InfrastructureResourcesApi.GetSnapshot(ic.Context, snapshots.Items[0].SnapshotId, &instanaSnapshotOpts)
-
-	if err != nil {
-		return fmt.Errorf("Failed to retrieve snapshot: %s", err)
-	}
-
-	nCPUs := int64(snapshot.Data["cpu.count"].(float64))
-	memBytes := int64(snapshot.Data["memory.total"].(float64))
-
-	fmt.Printf("CPUs: %d\nMemory: %d", nCPUs, memBytes)
 
 	return nil
-}
-
-/*
-	The number of data points returned per metric is limited to 600. Therefore, the rollup parameter (i.e. granularity) must be adjusted based on the build duration.
-	See: https://instana.github.io/openapi/#tag/Infrastructure-Metrics
-
-	Builds older than 24 hours are limited to a maximum granularity of 1 minute (see https://www.instana.com/docs/policies/#data-retention-policy)
-	This means if the build is short (e.g. <5 minutes), it may make sense to expand the time frame to get more metrics.
-	Builds run within the last 24 hours benefit from 1 or 5 second granularity.
-
-*/
-func computeRollupValue(buildStartTimeUnix int64, buildDurationMs int64) int32 {
-	MaxDataPoints := 600
-	var RollUpValuesSeconds []int
-
-	hoursSince := int(math.Floor(time.Now().Sub(time.Unix(buildStartTimeUnix, 0)).Hours()))
-	buildDurationSeconds := int(buildDurationMs / 1000)
-
-	if hoursSince < 24 {
-		RollUpValuesSeconds = []int{1, 5, 60, 300, 3600}
-	} else {
-		RollUpValuesSeconds = []int{60, 300, 3600}
-	}
-
-	for _, rollup := range RollUpValuesSeconds {
-		if int(buildDurationSeconds/rollup) < MaxDataPoints {
-			return int32(rollup)
-		}
-	}
-	return 1
 }

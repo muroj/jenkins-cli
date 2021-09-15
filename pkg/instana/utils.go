@@ -117,7 +117,7 @@ func GetHostConfiguration(hostname string, windowStartTimeUnix int64, windowSize
 	nCPUs := int64(snapshot.Data["cpu.count"].(float64))
 	memBytes := int64(snapshot.Data["memory.total"].(float64))
 
-	fmt.Printf("CPUs: %d\nMemory (MB)): %d\n", nCPUs, memBytes/1024/1024)
+	fmt.Printf("CPUs: %d\nMemory (MB): %d\n", nCPUs, memBytes/1024/1024)
 
 	return nil
 }

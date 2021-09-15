@@ -111,7 +111,7 @@ func parseJobURL(jobURL string) (string, []string, error) {
 
 func (bi *JenkinsBuildInfo) PrintBuildInfo() {
 	fmt.Printf("Project Name: %s\n", bi.JobName)
-	fmt.Printf("  ID: #%d\n", bi.BuildId)
+	fmt.Printf("  Build ID: #%d\n", bi.BuildId)
 	fmt.Printf("  Host: %s\n", bi.AgentHostMachine)
 	fmt.Printf("  Scheduled at: %s\n", bi.ScheduledTimestamp.String())
 	fmt.Printf("  Began executing at: %s\n", time.Unix(bi.ExecutionStartTimeUnix, 0))

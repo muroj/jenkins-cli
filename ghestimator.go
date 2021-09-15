@@ -9,19 +9,6 @@ import (
 	"github.ibm.com/jmuro/ghestimator/pkg/jenkins"
 )
 
-/* Command-line arguments */
-var (
-	jenkinsURL      string
-	jenkinsUser     string
-	jenkinsAPIToken string
-	jobURL          string
-	buildNumber     int64
-	instanaTenant   string
-	instanaUnit     string
-	instanaAPIKey   string
-	enableDebug     bool
-)
-
 func main() {
 
 	jenkinsCreds := jenkins.JenkinsCredentials{
@@ -45,6 +32,19 @@ func main() {
 		log.Fatalf("Failed to retrieve required build information: %s", err)
 	}
 }
+
+/* Command-line arguments */
+var (
+	jenkinsURL      string
+	jenkinsUser     string
+	jenkinsAPIToken string
+	jobURL          string
+	buildNumber     int64
+	instanaTenant   string
+	instanaUnit     string
+	instanaAPIKey   string
+	enableDebug     bool
+)
 
 /* Parse command-line arguments */
 func init() {
@@ -72,17 +72,22 @@ func init() {
 
 func getResourceUsage(buildInfo *jenkins.JenkinsBuildInfo, instanaClient *instana.InstanaAPIClient) error {
 
-	hostMetrics := []string{
-		"cpu.used", "load.1min", "memory.used",
+	timeWindow := instana.TimeWindow{
+		StartTimeUnix:    buildInfo.CompletedTimeUnix,
+		WindowDurationMs: buildInfo.ExecutionTimeMs,
 	}
 
-	err := instana.GetHostConfiguration(buildInfo.AgentHostMachine, buildInfo.CompletedTimeUnix, buildInfo.ExecutionTimeMs, instanaClient)
+	err := instana.GetHostConfiguration(buildInfo.AgentHostMachine, timeWindow, instanaClient)
 
 	if err != nil {
 		return fmt.Errorf("Error retrieving host configuration: %s", err)
 	}
 
-	metricsResult, err := instana.GetHostMetrics(buildInfo.AgentHostMachine, buildInfo.CompletedTimeUnix, buildInfo.ExecutionTimeMs, hostMetrics, instanaClient)
+	hostMetrics := []string{
+		"cpu.used", "load.1min", "memory.used",
+	}
+
+	metricsResult, err := instana.GetHostMetrics(buildInfo.AgentHostMachine, timeWindow, hostMetrics, instanaClient)
 
 	if err != nil {
 		return fmt.Errorf("Error retrieving host metrics: %s", err)

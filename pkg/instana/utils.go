@@ -32,7 +32,7 @@ func NewInstanaClient(instanaURL string, creds InstanaCredentials, debug bool) *
 	return &client
 }
 
-func GetHostMetrics(hostname string, windowStartTimeUnix int64, windowSizeMs int64, metricIds []string, instanaClient *InstanaAPIClient) ([]InstanaHostMetricResult, error) {
+func GetHostMetrics(hostname string, window TimeWindow, metricIds []string, instanaClient *InstanaAPIClient) ([]InstanaHostMetricResult, error) {
 	infraMetricsOpts := openapi.GetInfrastructureMetricsOpts{
 		Offline: optional.EmptyBool(),
 		GetCombinedMetrics: optional.NewInterface(openapi.GetCombinedMetrics{
@@ -40,10 +40,10 @@ func GetHostMetrics(hostname string, windowStartTimeUnix int64, windowSizeMs int
 			Plugin:  "host",
 			Query:   fmt.Sprintf("entity.host.name:%s", hostname),
 			TimeFrame: openapi.TimeFrame{
-				To:         windowStartTimeUnix * 1000, // Instana API requires nanosecond resolution
-				WindowSize: windowSizeMs,
+				To:         window.StartTimeUnix * 1000, // Instana API requires nanosecond resolution
+				WindowSize: window.WindowDurationMs,
 			},
-			Rollup: computeRollupValue(windowStartTimeUnix, windowSizeMs),
+			Rollup: computeRollupValue(window.StartTimeUnix, window.WindowDurationMs),
 		}),
 	}
 
@@ -87,14 +87,14 @@ func GetHostMetrics(hostname string, windowStartTimeUnix int64, windowSizeMs int
 	return results, nil
 }
 
-func GetHostConfiguration(hostname string, windowStartTimeUnix int64, windowSizeMs int64, instanaClient *InstanaAPIClient) error {
+func GetHostConfiguration(hostname string, window TimeWindow, instanaClient *InstanaAPIClient) error {
 
 	instanaSnapshotsOpts := openapi.GetSnapshotsOpts{
 		Offline:    optional.NewBool(true),
 		Plugin:     optional.NewString("host"),
 		Query:      optional.NewString(fmt.Sprintf("entity.host.name:%s", hostname)),
-		To:         optional.NewInt64(windowStartTimeUnix * 1000), // Instana API requires nanosecond resolution
-		WindowSize: optional.NewInt64(windowSizeMs),
+		To:         optional.NewInt64(window.StartTimeUnix * 1000), // Instana API requires nanosecond resolution
+		WindowSize: optional.NewInt64(window.WindowDurationMs),
 		Size:       optional.NewInt32(10),
 	}
 
@@ -105,8 +105,8 @@ func GetHostConfiguration(hostname string, windowStartTimeUnix int64, windowSize
 	}
 
 	instanaSnapshotOpts := openapi.GetSnapshotOpts{
-		To:         optional.NewInt64(windowStartTimeUnix * 1000), // Instana API requires nanosecond resolution
-		WindowSize: optional.NewInt64(windowSizeMs),
+		To:         optional.NewInt64(window.StartTimeUnix * 1000), // Instana API requires nanosecond resolution
+		WindowSize: optional.NewInt64(window.WindowDurationMs),
 	}
 	snapshot, _, err := instanaClient.Client.InfrastructureResourcesApi.GetSnapshot(instanaClient.Context, snapshots.Items[0].SnapshotId, &instanaSnapshotOpts)
 
@@ -114,9 +114,10 @@ func GetHostConfiguration(hostname string, windowStartTimeUnix int64, windowSize
 		return fmt.Errorf("Failed to retrieve snapshot: %s", err)
 	}
 
-	nCPUs := int64(snapshot.Data["cpu.count"].(float64))
-	memBytes := int64(snapshot.Data["memory.total"].(float64))
+	nCPUs := snapshot.Data.CPUCount
+	memBytes := snapshot.Data.MemoryTotal
 
+	fmt.Printf("OS: %s %s %s\n", snapshot.Data.OsName, snapshot.Data.OsArch, snapshot.Data.OsVersion)
 	fmt.Printf("CPUs: %d\nMemory (MB): %d\n", nCPUs, memBytes/1024/1024)
 
 	return nil

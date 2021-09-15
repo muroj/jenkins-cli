@@ -12,12 +12,48 @@ package openapi
 
 // SnapshotItem struct for SnapshotItem
 type SnapshotItem struct {
-	From       int64                  `json:"from,omitempty"`
-	Host       string                 `json:"host,omitempty"`
-	Label      string                 `json:"label,omitempty"`
-	Plugin     string                 `json:"plugin,omitempty"`
-	SnapshotId string                 `json:"snapshotId,omitempty"`
-	Tags       []string               `json:"tags,omitempty"`
-	To         int64                  `json:"to,omitempty"`
-	Data       map[string]interface{} `json:"data,omitempty"`
+	From       int64    `json:"from,omitempty"`
+	Host       string   `json:"host,omitempty"`
+	Label      string   `json:"label,omitempty"`
+	Plugin     string   `json:"plugin,omitempty"`
+	SnapshotId string   `json:"snapshotId,omitempty"`
+	Tags       []string `json:"tags,omitempty"`
+	To         int64    `json:"to,omitempty"`
+	Data       Data     `json:"data,omitempty"`
+}
+
+type Data struct {
+	NetworkInterfaces  map[string]NetworkInterface `json:"interfaces"`
+	CPUModel           string                      `json:"cpu.model"`
+	Fqdn               string                      `json:"fqdn"`
+	BootID             string                      `json:"bootId"`
+	OsArch             string                      `json:"os.arch"`
+	Start              int64                       `json:"start"`
+	MemoryTotal        int64                       `json:"memory.total"`
+	OpenFilesMax       int                         `json:"openFiles.max"`
+	Filesystems        map[string]Filesystems      `json:"filesystems"`
+	OsVersion          string                      `json:"os.version"`
+	Tags               []string                    `json:"tags"`
+	CPUCount           int                         `json:"cpu.count"`
+	Hostname           string                      `json:"hostname"`
+	MachineID          string                      `json:"machineId"`
+	SystemSerialNumber string                      `json:"systemSerialNumber"`
+	OsName             string                      `json:"os.name"`
+}
+
+type NetworkInterface struct {
+	Addresses []struct {
+		Subnet string   `json:"subnet"`
+		Fqdn   []string `json:"fqdn"`
+		IP     string   `json:"ip"`
+	} `json:"addresses"`
+	Mac string `json:"mac"`
+}
+
+type Filesystems struct {
+	Options   string `json:"options"`
+	Systype   string `json:"systype"`
+	Icapacity int    `json:"icapacity"`
+	Mount     string `json:"mount"`
+	Capacity  int    `json:"capacity"`
 }

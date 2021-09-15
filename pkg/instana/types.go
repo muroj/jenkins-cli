@@ -29,3 +29,16 @@ type InstanaHostMetricResult struct {
 	Average float32
 	Data    [][]float32
 }
+
+type InstanaHostSnapshotResult struct {
+	Name    string
+	Min     float32
+	Max     float32
+	Average float32
+	Data    [][]float32
+}
+
+type TimeWindow struct {
+	StartTimeUnix    int64
+	WindowDurationMs int64
+}

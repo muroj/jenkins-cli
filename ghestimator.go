@@ -44,11 +44,13 @@ func main() {
 
 	buildInfo.printBuildInfo()
 
+	instanaURL := fmt.Sprintf("%s-%s.instana.io", instanaTenant, instanaUnit)
+	instanaClient := newInstanaClient(instanaURL, InstanaCredentials{instanaAPIKey})
 	hostMetrics := []string{
 		"cpu.used", "load.1min", "memory.used",
 	}
-	instanaURL := fmt.Sprintf("%s-%s.instana.io", instanaTenant, instanaUnit)
-	err = getHostMetrics(buildInfo.AgentHostMachine, hostMetrics, buildInfo.CompletedTimeUnix, buildInfo.DurationMs, instanaURL, instanaAPIKey)
+
+	err = getResourceUsage(&buildInfo, hostMetrics, instanaClient)
 	if err != nil {
 		log.Fatalf("Failed to retrieve required build information: %s", err)
 	}
@@ -78,22 +80,27 @@ func init() {
 }
 
 type JenkinsBuildInfo struct {
-	Name               string
-	Id                 int64
-	ScheduledTimestamp time.Time
-	ScheduledTimeUnix  int64
-	CompletedTimeUnix  int64
-	DurationMs         int64
-	ExecutionTimeMs    int64
-	AgentHostMachine   string
+	JobName                string
+	BuildId                int64
+	ScheduledTimestamp     time.Time
+	ScheduledTimeUnix      int64
+	ExecutionStartTimeUnix int64
+	CompletedTimeUnix      int64
+	DurationMs             int64
+	ExecutionTimeMs        int64
+	AgentHostMachine       string
 }
 
 func (bi *JenkinsBuildInfo) printBuildInfo() {
-	fmt.Printf("Build ran on: %s\n", bi.AgentHostMachine)
-	fmt.Printf("Build started: %s\n", bi.ScheduledTimestamp.String())
-	fmt.Printf("Build ended: %s\n", time.Unix(bi.CompletedTimeUnix, 0))
-	fmt.Printf("Build duration (ms): %d\n", bi.DurationMs)
-	fmt.Printf("Execution Time (ms): %d\n", bi.ExecutionTimeMs)
+	fmt.Printf("Project Name: %s\n", bi.JobName)
+	fmt.Printf("  ID: #%d\n", bi.BuildId)
+	fmt.Printf("  Host: %s\n", bi.AgentHostMachine)
+	fmt.Printf("  Scheduled at: %s\n", bi.ScheduledTimestamp.String())
+	fmt.Printf("  Began executing at: %s\n", time.Unix(bi.ExecutionStartTimeUnix, 0))
+	fmt.Printf("  Ended: %s\n", time.Unix(bi.CompletedTimeUnix, 0))
+	fmt.Printf("  Execution Time(s): %d\n", bi.ExecutionTimeMs/int64(1000))
+	fmt.Printf("  Total Duration(s): %d\n", bi.DurationMs/int64(1000))
+
 }
 
 type JenkinsAPIClient struct {
@@ -149,10 +156,13 @@ func getJenkinsBuildInfo(jobURL string, id int64, jc *JenkinsAPIClient) (Jenkins
 		return buildInfo, fmt.Errorf("Failed to retrieve build: %s", err)
 	}
 
+	buildInfo.JobName = job.GetDetails().FullName
+	buildInfo.BuildId = build.GetBuildNumber()
 	buildInfo.ScheduledTimestamp = build.GetTimestamp()
 	buildInfo.DurationMs = int64(math.Round(build.GetDuration()))
-	buildInfo.CompletedTimeUnix = buildInfo.ScheduledTimestamp.Unix() + (int64(buildInfo.DurationMs) / 1000)
 	buildInfo.ExecutionTimeMs = build.GetExecutionTimeMs()
+	buildInfo.CompletedTimeUnix = buildInfo.ScheduledTimestamp.Unix() + (int64(buildInfo.DurationMs) / 1000)
+	buildInfo.ExecutionStartTimeUnix = buildInfo.ScheduledTimestamp.Unix() + (int64(buildInfo.DurationMs-buildInfo.ExecutionTimeMs) / 1000)
 	buildInfo.AgentHostMachine, err = findBuildHostMachineName(build, jc)
 
 	if err != nil {
@@ -201,34 +211,55 @@ type InstanaMetric struct {
 	Formatter func()
 }
 
-func getHostMetrics(hostname string, hostMetrics []string, startTimeUnix int64, durationMs int64, instanaURL string, instanaAPIKey string) error {
+type InstanaAPIClient struct {
+	Client    *instana.APIClient
+	Creds     InstanaCredentials
+	Context   context.Context
+	DebugMode bool
+}
 
-	// Create an instana client
-	configuration := instana.NewConfiguration()
-	configuration.Host = instanaURL
-	configuration.BasePath = fmt.Sprintf("https://%s", configuration.Host)
-	configuration.Debug = true
-	client := instana.NewAPIClient(configuration)
+type InstanaCredentials struct {
+	APIToken string
+}
+
+func newInstanaClient(instanaURL string, creds InstanaCredentials) *InstanaAPIClient {
+	log.Printf("Initializing Instana client")
+
+	conf := instana.NewConfiguration()
+	conf.Host = instanaURL
+	conf.BasePath = fmt.Sprintf("https://%s", conf.Host)
+	conf.Debug = false
+	iac := instana.NewAPIClient(conf)
+
 	authCtx := context.WithValue(context.Background(), instana.ContextAPIKey, instana.APIKey{
 		Key:    instanaAPIKey,
 		Prefix: "apiToken",
 	})
+
+	var client InstanaAPIClient
+	client.Client = iac
+	client.Context = authCtx
+
+	return &client
+}
+
+func getResourceUsage(buildInfo *JenkinsBuildInfo, hostMetrics []string, ic *InstanaAPIClient) error {
 
 	infraMetricsOpts := instana.GetInfrastructureMetricsOpts{
 		Offline: optional.EmptyBool(),
 		GetCombinedMetrics: optional.NewInterface(instana.GetCombinedMetrics{
 			Metrics: hostMetrics,
 			Plugin:  "host",
-			Query:   fmt.Sprintf("entity.host.name:%s", hostname),
+			Query:   fmt.Sprintf("entity.host.name:%s", buildInfo.AgentHostMachine),
 			TimeFrame: instana.TimeFrame{
-				To:         startTimeUnix * 1000, // Instana API requires nanosecond resolution
-				WindowSize: durationMs,
+				To:         buildInfo.ScheduledTimeUnix * 1000, // Instana API requires nanosecond resolution
+				WindowSize: buildInfo.DurationMs,
 			},
-			Rollup: computeRollupValue(startTimeUnix, durationMs),
+			Rollup: computeRollupValue(buildInfo.CompletedTimeUnix, buildInfo.DurationMs),
 		}),
 	}
 
-	metricsResult, _, err := client.InfrastructureMetricsApi.GetInfrastructureMetrics(authCtx, &infraMetricsOpts)
+	metricsResult, _, err := ic.Client.InfrastructureMetricsApi.GetInfrastructureMetrics(ic.Context, &infraMetricsOpts)
 
 	if err != nil {
 		return fmt.Errorf("Error retrieving host metrics: %s", err)
@@ -282,13 +313,13 @@ func getHostMetrics(hostname string, hostMetrics []string, startTimeUnix int64, 
 	instanaSnapshotsOpts := instana.GetSnapshotsOpts{
 		Offline:    optional.NewBool(true),
 		Plugin:     optional.NewString("host"),
-		Query:      optional.NewString(fmt.Sprintf("entity.host.name:%s", hostname)),
-		To:         optional.NewInt64(startTimeUnix * 1000), // Instana API requires nanosecond resolution
-		WindowSize: optional.NewInt64(durationMs),
+		Query:      optional.NewString(fmt.Sprintf("entity.host.name:%s", buildInfo.AgentHostMachine)),
+		To:         optional.NewInt64(buildInfo.CompletedTimeUnix * 1000), // Instana API requires nanosecond resolution
+		WindowSize: optional.NewInt64(buildInfo.DurationMs),
 		Size:       optional.NewInt32(10),
 	}
 
-	snapshots, _, err := client.InfrastructureResourcesApi.GetSnapshots(authCtx, &instanaSnapshotsOpts)
+	snapshots, _, err := ic.Client.InfrastructureResourcesApi.GetSnapshots(ic.Context, &instanaSnapshotsOpts)
 
 	if err != nil {
 		return fmt.Errorf("Failed to search snapshots: %s", err)
@@ -300,10 +331,10 @@ func getHostMetrics(hostname string, hostMetrics []string, startTimeUnix int64, 
 	}
 
 	instanaSnapshotOpts := instana.GetSnapshotOpts{
-		To:         optional.NewInt64(startTimeUnix * 1000), // Instana API requires nanosecond resolution
-		WindowSize: optional.NewInt64(durationMs),
+		To:         optional.NewInt64(buildInfo.CompletedTimeUnix * 1000), // Instana API requires nanosecond resolution
+		WindowSize: optional.NewInt64(buildInfo.DurationMs),
 	}
-	snapshot, _, err := client.InfrastructureResourcesApi.GetSnapshot(authCtx, snapshots.Items[0].SnapshotId, &instanaSnapshotOpts)
+	snapshot, _, err := ic.Client.InfrastructureResourcesApi.GetSnapshot(ic.Context, snapshots.Items[0].SnapshotId, &instanaSnapshotOpts)
 
 	if err != nil {
 		return fmt.Errorf("Failed to retrieve snapshot: %s", err)

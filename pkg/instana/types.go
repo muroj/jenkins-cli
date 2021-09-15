@@ -2,7 +2,6 @@ package instana
 
 import (
 	"context"
-	"fmt"
 
 	"github.ibm.com/jmuro/ghestimator/pkg/api/instana/openapi"
 )
@@ -29,8 +28,4 @@ type InstanaHostMetricResult struct {
 	Max     float32
 	Average float32
 	Data    [][]float32
-}
-
-func (r *InstanaHostMetricResult) PrintInstanaHostMetricResult() {
-	fmt.Printf("Metric: %s\n  average=%.2f%%\n  min=%.2f%%\n  max=%.2f%%\n", r.Name, r.Average, r.Min*100, r.Max*100)
 }

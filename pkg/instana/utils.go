@@ -150,3 +150,7 @@ func computeRollupValue(windowStartTimeUnix int64, windowSizeMs int64) int32 {
 	}
 	return 1
 }
+
+func (r *InstanaHostMetricResult) PrintInstanaHostMetricResult() {
+	fmt.Printf("Metric: %s\n  average=%.2f%%\n  min=%.2f%%\n  max=%.2f%%\n", r.Name, r.Average, r.Min*100, r.Max*100)
+}

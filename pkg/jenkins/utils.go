@@ -36,7 +36,7 @@ func NewJenkinsClient(jenkinsURL string, creds JenkinsCredentials, debug bool) *
 	return &jenkinsClient
 }
 
-func GetJenkinsBuildInfo(jobURL string, id int64, jc *JenkinsAPIClient) (JenkinsBuildInfo, error) {
+func GetBuildInfo(jobURL string, id int64, jc *JenkinsAPIClient) (JenkinsBuildInfo, error) {
 	var buildInfo JenkinsBuildInfo
 
 	log.Printf("Retrieving job at URL: \"%s\"", jobURL)

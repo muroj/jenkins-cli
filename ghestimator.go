@@ -16,7 +16,7 @@ func main() {
 		APIToken: jenkinsAPIToken,
 	}
 	jenkinsClient := jenkins.NewJenkinsClient(jenkinsURL, jenkinsCreds, enableDebug)
-	buildInfo, err := jenkins.GetJenkinsBuildInfo(jobURL, buildNumber, jenkinsClient)
+	buildInfo, err := jenkins.GetBuildInfo(jobURL, buildNumber, jenkinsClient)
 
 	if err != nil {
 		log.Fatalf("Failed to retrieve required build information: %s", err)

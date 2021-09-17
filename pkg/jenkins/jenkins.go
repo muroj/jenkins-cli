@@ -47,14 +47,8 @@ func NewJenkinsClient(jenkinsURL string, creds JenkinsCredentials, debug bool) *
 	return &jenkinsClient
 }
 
-func GetBuild(url string, user string, apiToken string, projectUrl string, buildId int64) {
-
-	jenkinsCreds := JenkinsCredentials{
-		Username: user,
-		APIToken: apiToken,
-	}
-	jenkinsClient := NewJenkinsClient(url, jenkinsCreds, false)
-	buildInfo, err := GetBuildInfo(projectUrl, buildId, jenkinsClient)
+func GetBuild(c *JenkinsAPIClient, projectUrl string, buildId int64) {
+	buildInfo, err := GetBuildInfo(projectUrl, buildId, c)
 
 	if err != nil {
 		log.Fatalf("Unable to retrieve build information: %s", err)
@@ -128,25 +122,15 @@ func GetBuildInfo(jobURL string, id int64, jc *JenkinsAPIClient) (JenkinsBuildIn
 	return buildInfo, nil
 }
 
-func GetVersion(url string, user string, apiToken string) {
-
-	creds := JenkinsCredentials{
-		Username: user,
-		APIToken: apiToken,
-	}
-	c := NewJenkinsClient(url, creds, false)
-
+func GetVersion(c *JenkinsAPIClient) {
 	fmt.Printf(c.Client.Version)
 }
 
-func ListPlugins(url string, user string, apiToken string) error {
+func InstallPlugins(url string, user string, apiToken string, pluginListJson string) error {
+	panic("Not implemented")
+}
 
-	creds := JenkinsCredentials{
-		Username: user,
-		APIToken: apiToken,
-	}
-	c := NewJenkinsClient(url, creds, false)
-
+func ListPlugins(c *JenkinsAPIClient) error {
 	plugins, err := c.Client.GetPlugins(c.Context, 2)
 	if err != nil {
 		return fmt.Errorf("Unable to list plugins: %s", err)

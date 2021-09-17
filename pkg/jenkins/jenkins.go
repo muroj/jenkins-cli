@@ -126,7 +126,8 @@ func GetVersion(c *JenkinsAPIClient) {
 	fmt.Printf(c.Client.Version)
 }
 
-func InstallPlugins(url string, user string, apiToken string, pluginListJson string) error {
+func InstallPlugins(c *JenkinsAPIClient, pluginListJson string) error {
+	return nil
 	panic("Not implemented")
 }
 

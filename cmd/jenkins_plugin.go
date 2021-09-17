@@ -24,13 +24,14 @@ var installPluginsCmd = &cobra.Command{
 	Use:   "install",
 	Short: "List installed Jenkins plugins",
 	Run: func(cmd *cobra.Command, args []string) {
-		jenkins.InstallPlugins(url, user, apiToken, pluginListJson)
+		jenkins.InstallPlugins(jenkinsClient, pluginListJson)
 	},
 }
 
 func init() {
 	usage := `List of plugins to install specified as JSON. For example, "[{"name": "docker-plugin", "version": "1.2.3" }, ...]"`
 	installPluginsCmd.Flags().StringVarP(&pluginListJson, "plugin-list", "j", "", usage)
+	installPluginsCmd.MarkFlagRequired("plugin-list")
 	pluginCmd.AddCommand(listPluginsCmd)
 	rootCmd.AddCommand(jenkinsCmd)
 }

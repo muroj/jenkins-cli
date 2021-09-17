@@ -2,6 +2,7 @@ package jenkins
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"log"
 	"math"
@@ -26,8 +27,6 @@ type JenkinsCredentials struct {
 }
 
 func NewJenkinsClient(jenkinsURL string, creds JenkinsCredentials, debug bool) *JenkinsAPIClient {
-	log.Printf("Initializing Jenkins client")
-
 	var jenkinsClient JenkinsAPIClient
 	var ctx context.Context
 
@@ -138,6 +137,25 @@ func GetVersion(url string, user string, apiToken string) {
 	c := NewJenkinsClient(url, creds, false)
 
 	fmt.Printf(c.Client.Version)
+}
+
+func ListPlugins(url string, user string, apiToken string) error {
+
+	creds := JenkinsCredentials{
+		Username: user,
+		APIToken: apiToken,
+	}
+	c := NewJenkinsClient(url, creds, false)
+
+	plugins, err := c.Client.GetPlugins(c.Context, 2)
+	if err != nil {
+		return fmt.Errorf("Unable to list plugins: %s", err)
+	}
+
+	pluginsJson, err := json.Marshal(plugins.Raw.Plugins)
+	fmt.Printf("%s", pluginsJson)
+
+	return nil
 }
 
 /*

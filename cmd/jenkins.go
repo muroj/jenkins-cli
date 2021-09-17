@@ -31,7 +31,6 @@ var (
 	enableDebug bool
 )
 
-// jenkinsCmd represents the jenkins command
 var jenkinsCmd = &cobra.Command{
 	Use:   "jenkins",
 	Short: "Run a command against a jenkins instance.",
@@ -54,6 +53,19 @@ This application is a tool to generate the needed files
 to quickly create a Cobra application.`,
 	Run: func(cmd *cobra.Command, args []string) {
 		jenkins.GetVersion(url, user, apiToken)
+	},
+}
+
+var pluginCmd = &cobra.Command{
+	Use:   "plugin",
+	Short: "Manage Jenkins plugins",
+}
+
+var listPluginsCmd = &cobra.Command{
+	Use:   "list",
+	Short: "List installed Jenkins plugins",
+	Run: func(cmd *cobra.Command, args []string) {
+		jenkins.ListPlugins(url, user, apiToken)
 	},
 }
 
@@ -109,7 +121,11 @@ func init() {
 	buildCmd.Flags().Int64Var(&buildId, "id", 0, "ID of the target build (required), e.g. 22. An value of 0 indicates the most recent build")
 	getCmd.AddCommand(buildCmd)
 
+	pluginCmd.AddCommand(listPluginsCmd)
+
+	//pluginCmd.AddCommand(installPluginCmd)
 	jenkinsCmd.AddCommand(versionCmd)
+	jenkinsCmd.AddCommand(pluginCmd)
 	jenkinsCmd.AddCommand(getCmd)
 	rootCmd.AddCommand(jenkinsCmd)
 }

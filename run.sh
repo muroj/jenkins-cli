@@ -10,3 +10,5 @@ export JOB_URL="job/watson-engagement-advisor/job/clu-algorithms-service/job/mas
 
 ./tronci.bin jenkins --user="$JENKINS_USER" --api-token="$JENKINS_API_TOKEN" --url="$JENKINS_URL" version
 
+./tronci.bin jenkins --user="$JENKINS_USER" --api-token="$JENKINS_API_TOKEN" --url="$JENKINS_URL" plugin list 
+

@@ -17,7 +17,6 @@ package cmd
 
 import (
 	"fmt"
-	"strconv"
 
 	"github.com/spf13/cobra"
 	"github.ibm.com/jmuro/ghestimator/pkg/jenkins"
@@ -28,7 +27,7 @@ var (
 	user        string
 	apiToken    string
 	jobURL      string
-	buildNumber int64
+	buildId     int64
 	enableDebug bool
 )
 
@@ -42,13 +41,10 @@ and usage of using your command. For example:
 Cobra is a CLI library for Go that empowers applications.
 This application is a tool to generate the needed files
 to quickly create a Cobra application.`,
-	Run: func(cmd *cobra.Command, args []string) {
-		fmt.Println("jenkins called")
-	},
 }
 
 var versionCmd = &cobra.Command{
-	Use:   "jenkins version",
+	Use:   "version",
 	Short: "Output the version of the target jenkins",
 	Long: `A longer description that spans multiple lines and likely contains examples
 and usage of using your command. For example:
@@ -57,18 +53,8 @@ Cobra is a CLI library for Go that empowers applications.
 This application is a tool to generate the needed files
 to quickly create a Cobra application.`,
 	Run: func(cmd *cobra.Command, args []string) {
-		fmt.Println("jenkins version called")
+		jenkins.GetVersion(url, user, apiToken)
 	},
-	// func(cmd *cobra.Command, args []string) error {
-	// 	if len(args) < 1 {
-	// 		return errors.New("You must specify the type of resource to get.")
-	// 	}
-	// 	if jenkins.isValidResource(args[0]) {
-	// 		return nil
-	// 	}
-	// 	return fmt.Errorf("invalid color specified: %s", args[0])
-	// 	},
-	// }
 }
 
 var getCmd = &cobra.Command{
@@ -80,41 +66,17 @@ and usage of using your command. For example:
 Cobra is a CLI library for Go that empowers applications.
 This application is a tool to generate the needed files
 to quickly create a Cobra application.`,
-	Run: func(cmd *cobra.Command, args []string) {
-		fmt.Println(args)
-		switch args[0] {
-		case "build":
-			{
-				projectUrl := args[1]
-				buildId, _ := strconv.ParseInt(args[2], 10, 64)
-				jenkins.GetBuild(url, user, apiToken, projectUrl, buildId)
-			}
-		case "project":
-			{
-				panic("Not implemented")
-			}
-		case "version":
-			{
-				panic("Not implemented")
-			}
-		case "nodes":
-			{
-				panic("Not implemented")
-			}
-		}
-	},
 	Args: func(cmd *cobra.Command, args []string) error {
 		if len(args) < 1 {
 			return fmt.Errorf("You must specify the type of resource to get.")
 		}
 		return nil
 	},
-	//ValidArgs: []string{"build", "project", "version", "nodes"},
 }
 
-var metricsCmd = &cobra.Command{
-	Use:   "getmetrics",
-	Short: "Output metrics for a specified jenkins build.",
+var buildCmd = &cobra.Command{
+	Use:   "build",
+	Short: "Display info for a specified build",
 	Long: `A longer description that spans multiple lines and likely contains examples
 and usage of using your command. For example:
 
@@ -122,7 +84,8 @@ Cobra is a CLI library for Go that empowers applications.
 This application is a tool to generate the needed files
 to quickly create a Cobra application.`,
 	Run: func(cmd *cobra.Command, args []string) {
-		fmt.Println("jenkins build metrics")
+		projectUrl := args[0]
+		jenkins.GetBuild(url, user, apiToken, projectUrl, buildId)
 	},
 }
 
@@ -132,7 +95,6 @@ func init() {
 	// Cobra supports Persistent Flags which will work for this command
 	// and all subcommands, e.g.:
 	// jenkinsCmd.PersistentFlags().String("foo", "", "A help for foo")
-
 	// Cobra supports local flags which will only run when this command
 	// is called directly, e.g.:
 	// jenkinsCmd.Flags().BoolP("toggle", "t", false, "Help message for toggle")
@@ -144,7 +106,10 @@ func init() {
 	jenkinsCmd.MarkPersistentFlagRequired("user")
 	jenkinsCmd.MarkPersistentFlagRequired("api-token")
 
-	getCmd.AddCommand(versionCmd)
+	buildCmd.Flags().Int64Var(&buildId, "id", 0, "ID of the target build (required), e.g. 22. An value of 0 indicates the most recent build")
+	getCmd.AddCommand(buildCmd)
+
+	jenkinsCmd.AddCommand(versionCmd)
 	jenkinsCmd.AddCommand(getCmd)
 	rootCmd.AddCommand(jenkinsCmd)
 }

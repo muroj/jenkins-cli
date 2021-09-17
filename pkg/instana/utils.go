@@ -8,7 +8,7 @@ import (
 	"time"
 
 	"github.com/antihax/optional"
-	"github.ibm.com/jmuro/ghestimator/pkg/api/instana/openapi"
+	"github.ibm.com/jmuro/tronci/pkg/api/instana/openapi"
 )
 
 func NewInstanaClient(instanaURL string, creds InstanaCredentials, debug bool) *InstanaAPIClient {

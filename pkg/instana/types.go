@@ -3,7 +3,7 @@ package instana
 import (
 	"context"
 
-	"github.ibm.com/jmuro/ghestimator/pkg/api/instana/openapi"
+	"github.ibm.com/jmuro/tronci/pkg/api/instana/openapi"
 )
 
 type InstanaMetric struct {

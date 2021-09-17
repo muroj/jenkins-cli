@@ -19,7 +19,7 @@ import (
 	"fmt"
 
 	"github.com/spf13/cobra"
-	"github.ibm.com/jmuro/ghestimator/pkg/jenkins"
+	"github.ibm.com/jmuro/tronci/pkg/jenkins"
 )
 
 var (

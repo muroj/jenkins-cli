@@ -15,7 +15,7 @@ limitations under the License.
 */
 package main
 
-import "github.ibm.com/jmuro/ghestimator/cmd"
+import "github.ibm.com/jmuro/tronci/cmd"
 
 func main() {
 	cmd.Execute()

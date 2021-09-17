@@ -4,7 +4,7 @@ go 1.16
 
 replace github.com/bndr/gojenkins v1.1.0 => github.com/muroj/gojenkins v1.1.1
 
-replace github.com/muroj/gojenkins v1.1.1 => ../gojenkins
+#replace github.com/muroj/gojenkins v1.1.1 => ../gojenkins
 
 require (
 	github.com/antihax/optional v1.0.0

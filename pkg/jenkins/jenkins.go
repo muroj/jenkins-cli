@@ -2,6 +2,7 @@ package jenkins
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"log"
 	"math"
@@ -13,9 +14,19 @@ import (
 	"github.com/muroj/gojenkins"
 )
 
-func NewJenkinsClient(jenkinsURL string, creds JenkinsCredentials, debug bool) *JenkinsAPIClient {
-	log.Printf("Initializing Jenkins client")
+type JenkinsAPIClient struct {
+	Client    *gojenkins.Jenkins
+	Creds     JenkinsCredentials
+	Context   context.Context
+	DebugMode bool
+}
 
+type JenkinsCredentials struct {
+	Username string
+	APIToken string
+}
+
+func NewJenkinsClient(jenkinsURL string, creds JenkinsCredentials, debug bool) *JenkinsAPIClient {
 	var jenkinsClient JenkinsAPIClient
 	var ctx context.Context
 
@@ -36,14 +47,47 @@ func NewJenkinsClient(jenkinsURL string, creds JenkinsCredentials, debug bool) *
 	return &jenkinsClient
 }
 
-func GetJenkinsBuildInfo(jobURL string, id int64, jc *JenkinsAPIClient) (JenkinsBuildInfo, error) {
+func GetBuild(c *JenkinsAPIClient, projectUrl string, buildId int64) {
+	buildInfo, err := GetBuildInfo(projectUrl, buildId, c)
+
+	if err != nil {
+		log.Fatalf("Unable to retrieve build information: %s", err)
+	}
+
+	buildInfo.PrintBuildInfo()
+}
+
+type JenkinsBuildInfo struct {
+	JobName                string
+	BuildId                int64
+	ScheduledTimestamp     time.Time
+	ScheduledTimeUnix      int64
+	ExecutionStartTimeUnix int64
+	CompletedTimeUnix      int64
+	DurationMs             int64
+	ExecutionTimeMs        int64
+	AgentHostMachine       string
+}
+
+func (bi *JenkinsBuildInfo) PrintBuildInfo() {
+	fmt.Printf("Project Name: %s\n", bi.JobName)
+	fmt.Printf("  Build ID: #%d\n", bi.BuildId)
+	fmt.Printf("  Host: %s\n", bi.AgentHostMachine)
+	fmt.Printf("  Scheduled at: %s\n", bi.ScheduledTimestamp.String())
+	fmt.Printf("  Began executing at: %s\n", time.Unix(bi.ExecutionStartTimeUnix, 0))
+	fmt.Printf("  Ended: %s\n", time.Unix(bi.CompletedTimeUnix, 0))
+	fmt.Printf("  Execution Time(s): %d\n", bi.ExecutionTimeMs/int64(1000))
+	fmt.Printf("  Total Duration(s): %d\n", bi.DurationMs/int64(1000))
+}
+
+func GetBuildInfo(jobURL string, id int64, jc *JenkinsAPIClient) (JenkinsBuildInfo, error) {
 	var buildInfo JenkinsBuildInfo
 
 	log.Printf("Retrieving job at URL: \"%s\"", jobURL)
 	jobName, path, _ := parseJobURL(jobURL)
 	job, err := jc.Client.GetJob(jc.Context, jobName, path...)
 	if err != nil {
-		return buildInfo, fmt.Errorf("Failed to retreive job with URL \"%s\"\n %s", jobURL, err)
+		return buildInfo, fmt.Errorf("Unable to retreive job at URL \"%s\": %s", jobURL, err)
 	}
 
 	var build *gojenkins.Build
@@ -72,7 +116,31 @@ func GetJenkinsBuildInfo(jobURL string, id int64, jc *JenkinsAPIClient) (Jenkins
 		return buildInfo, fmt.Errorf("Could not determine build agent name.")
 	}
 
+	// buildJson, err := json.Marshal(build.Raw)
+	// fmt.Printf("%s", buildJson)
+
 	return buildInfo, nil
+}
+
+func GetVersion(c *JenkinsAPIClient) {
+	fmt.Printf(c.Client.Version)
+}
+
+func InstallPlugins(c *JenkinsAPIClient, pluginListJson string) error {
+	return nil
+	panic("Not implemented")
+}
+
+func ListPlugins(c *JenkinsAPIClient) error {
+	plugins, err := c.Client.GetPlugins(c.Context, 2)
+	if err != nil {
+		return fmt.Errorf("Unable to list plugins: %s", err)
+	}
+
+	pluginsJson, err := json.Marshal(plugins.Raw.Plugins)
+	fmt.Printf("%s", pluginsJson)
+
+	return nil
 }
 
 /*
@@ -107,15 +175,4 @@ func parseJobURL(jobURL string) (string, []string, error) {
 	}
 
 	return name, parentIds, nil
-}
-
-func (bi *JenkinsBuildInfo) PrintBuildInfo() {
-	fmt.Printf("Project Name: %s\n", bi.JobName)
-	fmt.Printf("  Build ID: #%d\n", bi.BuildId)
-	fmt.Printf("  Host: %s\n", bi.AgentHostMachine)
-	fmt.Printf("  Scheduled at: %s\n", bi.ScheduledTimestamp.String())
-	fmt.Printf("  Began executing at: %s\n", time.Unix(bi.ExecutionStartTimeUnix, 0))
-	fmt.Printf("  Ended: %s\n", time.Unix(bi.CompletedTimeUnix, 0))
-	fmt.Printf("  Execution Time(s): %d\n", bi.ExecutionTimeMs/int64(1000))
-	fmt.Printf("  Total Duration(s): %d\n", bi.DurationMs/int64(1000))
 }

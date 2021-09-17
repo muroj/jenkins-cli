@@ -89,5 +89,4 @@ func init() {
 	jenkinsCmd.AddCommand(versionCmd)
 	jenkinsCmd.AddCommand(pluginCmd)
 	jenkinsCmd.AddCommand(getCmd)
-	rootCmd.AddCommand(jenkinsCmd)
 }

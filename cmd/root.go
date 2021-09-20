@@ -17,15 +17,9 @@ package cmd
 
 import (
 	"fmt"
-<<<<<<< HEAD
 	"os"
 
 	"github.com/spf13/cobra"
-=======
-	"github.com/spf13/cobra"
-	"os"
-
->>>>>>> origin/cobrify
 	"github.com/spf13/viper"
 )
 

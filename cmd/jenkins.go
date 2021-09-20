@@ -35,7 +35,6 @@ var (
 var jenkinsCmd = &cobra.Command{
 	Use:   "jenkins",
 	Short: "Run a command against a jenkins instance.",
-<<<<<<< HEAD
 	PersistentPreRun: func(cmd *cobra.Command, args []string) {
 		jenkinsCreds := jenkins.JenkinsCredentials{
 			Username: user,
@@ -43,22 +42,12 @@ var jenkinsCmd = &cobra.Command{
 		}
 		jenkinsClient = jenkins.NewJenkinsClient(url, jenkinsCreds, false)
 	},
-=======
->>>>>>> origin/cobrify
 }
 
 var versionCmd = &cobra.Command{
 	Use:   "version",
 	Short: "Output the version of the target jenkins",
 	Run: func(cmd *cobra.Command, args []string) {
-<<<<<<< HEAD
-=======
-		jenkinsCreds := jenkins.JenkinsCredentials{
-			Username: user,
-			APIToken: apiToken,
-		}
-		jenkinsClient = jenkins.NewJenkinsClient(url, jenkinsCreds, false)
->>>>>>> origin/cobrify
 		jenkins.GetVersion(jenkinsClient)
 	},
 }
@@ -79,14 +68,6 @@ var buildCmd = &cobra.Command{
 	Short: "Display info for a specified build",
 	Run: func(cmd *cobra.Command, args []string) {
 		projectUrl := args[0]
-<<<<<<< HEAD
-=======
-		jenkinsCreds := jenkins.JenkinsCredentials{
-			Username: user,
-			APIToken: apiToken,
-		}
-		jenkinsClient = jenkins.NewJenkinsClient(url, jenkinsCreds, false)
->>>>>>> origin/cobrify
 		jenkins.GetBuild(jenkinsClient, projectUrl, buildId)
 	},
 }

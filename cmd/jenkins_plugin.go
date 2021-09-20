@@ -16,14 +16,11 @@ var listPluginsCmd = &cobra.Command{
 	Use:   "list",
 	Short: "List installed Jenkins plugins",
 	Run: func(cmd *cobra.Command, args []string) {
-<<<<<<< HEAD
-=======
 		jenkinsCreds := jenkins.JenkinsCredentials{
 			Username: user,
 			APIToken: apiToken,
 		}
 		jenkinsClient = jenkins.NewJenkinsClient(url, jenkinsCreds, false)
->>>>>>> origin/cobrify
 		jenkins.ListPlugins(jenkinsClient)
 	},
 }
@@ -32,14 +29,11 @@ var installPluginsCmd = &cobra.Command{
 	Use:   "install",
 	Short: "List installed Jenkins plugins",
 	Run: func(cmd *cobra.Command, args []string) {
-<<<<<<< HEAD
-=======
 		jenkinsCreds := jenkins.JenkinsCredentials{
 			Username: user,
 			APIToken: apiToken,
 		}
 		jenkinsClient = jenkins.NewJenkinsClient(url, jenkinsCreds, false)
->>>>>>> origin/cobrify
 		jenkins.InstallPlugins(jenkinsClient, pluginListJson)
 	},
 }

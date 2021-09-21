@@ -128,6 +128,7 @@ func GetVersion(c *JenkinsAPIClient) {
 }
 
 func InstallPlugins(c *JenkinsAPIClient, pluginListJson string) error {
+
 	type plugin_desc struct {
 		Name    string `json:"name"`
 		Version string `json:"version"`
@@ -173,6 +174,18 @@ func InstallPlugins(c *JenkinsAPIClient, pluginListJson string) error {
 			}
 		}
 	}
+
+	uc, err := c.Client.GetUpdateCenter(c.Context)
+
+	if err != nil {
+		log.Fatalf("failed to retrieve update center info: %s", err)
+	}
+
+	if uc.RestartRequired() == true {
+		log.Printf("Restart jenkins to finish installing plugins")
+	}
+
+	uc.PrintFailedPlugins()
 
 	return nil
 }

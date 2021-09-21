@@ -45,7 +45,7 @@ var versionCmd = &cobra.Command{
 			Username: user,
 			APIToken: apiToken,
 		}
-		jenkinsClient = jenkins.NewJenkinsClient(url, jenkinsCreds, false)
+		jenkinsClient = jenkins.NewJenkinsClient(url, jenkinsCreds, enableDebug)
 		jenkins.GetVersion(jenkinsClient)
 	},
 }
@@ -55,7 +55,7 @@ var getCmd = &cobra.Command{
 	Short: "Get data for a jenkins object.",
 	Args: func(cmd *cobra.Command, args []string) error {
 		if len(args) < 1 {
-			return fmt.Errorf("You must specify the type of resource to get.")
+			return fmt.Errorf("you must specify the type of resource to get")
 		}
 		return nil
 	},
@@ -70,7 +70,7 @@ var buildCmd = &cobra.Command{
 			Username: user,
 			APIToken: apiToken,
 		}
-		jenkinsClient = jenkins.NewJenkinsClient(url, jenkinsCreds, false)
+		jenkinsClient = jenkins.NewJenkinsClient(url, jenkinsCreds, enableDebug)
 		jenkins.GetBuild(jenkinsClient, projectUrl, buildId)
 	},
 }
@@ -81,6 +81,7 @@ func init() {
 	jenkinsCmd.PersistentFlags().StringVar(&url, "url", "", "URL of the Jenkins host (required), e.g. \"https://ghenkins.bigdatalab.ibm.com/\"")
 	jenkinsCmd.PersistentFlags().StringVar(&user, "user", "", "Jenkins username (required)")
 	jenkinsCmd.PersistentFlags().StringVar(&apiToken, "api-token", "", "Jenkins API token (required)")
+	jenkinsCmd.PersistentFlags().BoolVarP(&enableDebug, "debug", "v", false, "Enable debug output")
 	jenkinsCmd.MarkPersistentFlagRequired("url")
 	jenkinsCmd.MarkPersistentFlagRequired("user")
 	jenkinsCmd.MarkPersistentFlagRequired("api-token")

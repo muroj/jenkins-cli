@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/muroj/gojenkins"
+	"golang.org/x/mod/semver"
 )
 
 type JenkinsAPIClient struct {
@@ -87,7 +88,7 @@ func GetBuildInfo(jobURL string, id int64, jc *JenkinsAPIClient) (JenkinsBuildIn
 	jobName, path, _ := parseJobURL(jobURL)
 	job, err := jc.Client.GetJob(jc.Context, jobName, path...)
 	if err != nil {
-		return buildInfo, fmt.Errorf("Unable to retreive job at URL \"%s\": %s", jobURL, err)
+		return buildInfo, fmt.Errorf("unable to retreive job at URL \"%s\": %s", jobURL, err)
 	}
 
 	var build *gojenkins.Build
@@ -100,7 +101,7 @@ func GetBuildInfo(jobURL string, id int64, jc *JenkinsAPIClient) (JenkinsBuildIn
 	}
 
 	if err != nil {
-		return buildInfo, fmt.Errorf("Failed to retrieve build: %s", err)
+		return buildInfo, fmt.Errorf("failed to retrieve build: %s", err)
 	}
 
 	buildInfo.JobName = job.GetDetails().FullName
@@ -113,7 +114,7 @@ func GetBuildInfo(jobURL string, id int64, jc *JenkinsAPIClient) (JenkinsBuildIn
 	buildInfo.AgentHostMachine, err = findBuildHostMachineName(build, jc)
 
 	if err != nil {
-		return buildInfo, fmt.Errorf("Could not determine build agent name.")
+		return buildInfo, fmt.Errorf("could not determine build agent name")
 	}
 
 	// buildJson, err := json.Marshal(build.Raw)
@@ -127,17 +128,81 @@ func GetVersion(c *JenkinsAPIClient) {
 }
 
 func InstallPlugins(c *JenkinsAPIClient, pluginListJson string) error {
+
+	type plugin_desc struct {
+		Name    string `json:"name"`
+		Version string `json:"version"`
+	}
+
+	var requestedPlugins []plugin_desc
+	err := json.Unmarshal([]byte(pluginListJson), &requestedPlugins)
+	if err != nil {
+		log.Fatalf("failed to decode plugin list as JSON: %s", err)
+	}
+
+	installed, err := c.Client.GetPlugins(c.Context, 1)
+	if err != nil {
+		log.Fatalf("failed to retrieve installed plugins from target jenkins server: %s", err)
+	}
+
+	for _, p := range requestedPlugins {
+		if tp := installed.Contains(p.Name); tp != nil {
+			iv := fmt.Sprintf("v%s", tp.Version)
+			sv := fmt.Sprintf("v%s", p.Version)
+
+			if semver.Compare(iv, sv) == 0 {
+				log.Printf("%s is already at version: %s", p.Name, iv)
+			} else if semver.Compare(iv, sv) > 0 {
+				log.Printf("more recent version of %s is installed: installed: %s, requeted: %s", p.Name, iv, sv)
+			} else {
+				log.Printf("%s needs updating: %s", p.Name, iv)
+			}
+		} else {
+			log.Printf("installing %s:%s", p.Name, p.Version)
+
+			/* InstallPlugin does not indicate whether plugin installation is successful. It doesn't
+			   even verify whether the plugin actually exists.  It only POSTs the data and returns.
+			   It will return a 500 server error if the plugin version is not valid.
+			   The UpdateManager API can be used to track plugin installation job status.
+
+			   Considering I intend to install plugins retrieved from another Jenkins installation,
+			   this should be good enough.
+			*/
+			err := c.Client.InstallPlugin(c.Context, p.Name, p.Version)
+			if err != nil {
+				log.Fatalf("failed to install plugin %s:%s %s", p.Name, p.Version, err)
+			}
+		}
+	}
+
+	uc, err := c.Client.GetUpdateCenter(c.Context)
+
+	if err != nil {
+		log.Fatalf("failed to retrieve update center info: %s", err)
+	}
+
+	if uc.RestartRequired() == true {
+		log.Printf("Restart jenkins to finish installing plugins")
+	}
+
+	uc.PrintFailedPlugins()
+
 	return nil
-	panic("Not implemented")
 }
 
 func ListPlugins(c *JenkinsAPIClient) error {
 	plugins, err := c.Client.GetPlugins(c.Context, 2)
+
 	if err != nil {
-		return fmt.Errorf("Unable to list plugins: %s", err)
+		return fmt.Errorf("unable to list plugins: %s", err)
 	}
 
 	pluginsJson, err := json.Marshal(plugins.Raw.Plugins)
+
+	if err != nil {
+		return fmt.Errorf("failed to encode plugin list as JSON: %s", err)
+	}
+
 	fmt.Printf("%s", pluginsJson)
 
 	return nil
@@ -148,10 +213,10 @@ func ListPlugins(c *JenkinsAPIClient) error {
 */
 func findBuildHostMachineName(build *gojenkins.Build, jc *JenkinsAPIClient) (string, error) {
 	buildLog := build.GetConsoleOutput(jc.Context)
-	r, _ := regexp.Compile(`Running on \b([\w]+\b)`)
+	r, _ := regexp.Compile(`running on \b([\w]+\b)`)
 	m := r.FindStringSubmatch(buildLog)
 	if m == nil {
-		return "", fmt.Errorf("Unable to determine host node: \"Running on <nodeName>\" line not found in build log.")
+		return "", fmt.Errorf("unable to determine host node: \"Running on <nodeName>\" line not found in build log")
 	}
 
 	return m[1], nil

@@ -20,7 +20,7 @@ var listPluginsCmd = &cobra.Command{
 			Username: user,
 			APIToken: apiToken,
 		}
-		jenkinsClient = jenkins.NewJenkinsClient(url, jenkinsCreds, false)
+		jenkinsClient = jenkins.NewJenkinsClient(url, jenkinsCreds, enableDebug)
 		jenkins.ListPlugins(jenkinsClient)
 	},
 }
@@ -33,7 +33,7 @@ var installPluginsCmd = &cobra.Command{
 			Username: user,
 			APIToken: apiToken,
 		}
-		jenkinsClient = jenkins.NewJenkinsClient(url, jenkinsCreds, false)
+		jenkinsClient = jenkins.NewJenkinsClient(url, jenkinsCreds, enableDebug)
 		jenkins.InstallPlugins(jenkinsClient, pluginListJson)
 	},
 }

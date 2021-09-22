@@ -17,4 +17,5 @@
 
 # OSX
 .DS_Store
-
+*.swp
+.vscode/

@@ -29,9 +29,9 @@ var (
 	user          string
 	apiToken      string
 	jobURL        string
-	buildId       int64
+	buildID       int64
 	enableDebug   bool
-	jenkinsClient *jenkins.JenkinsAPIClient
+	jenkinsClient *jenkins.APIClient
 )
 
 var jenkinsCmd = &cobra.Command{
@@ -46,7 +46,7 @@ var versionCmd = &cobra.Command{
 	Use:   "version",
 	Short: "Output the version of the target jenkins",
 	Run: func(cmd *cobra.Command, args []string) {
-		jenkinsCreds := jenkins.JenkinsCredentials{
+		jenkinsCreds := jenkins.Credentials{
 			Username: user,
 			APIToken: apiToken,
 		}
@@ -70,13 +70,13 @@ var buildCmd = &cobra.Command{
 	Use:   "build",
 	Short: "Display info for a specified build",
 	Run: func(cmd *cobra.Command, args []string) {
-		projectUrl := args[0]
-		jenkinsCreds := jenkins.JenkinsCredentials{
+		projectURL := args[0]
+		jenkinsCreds := jenkins.Credentials{
 			Username: user,
 			APIToken: apiToken,
 		}
 		jenkinsClient = jenkins.NewJenkinsClient(url, jenkinsCreds, enableDebug)
-		jenkins.GetBuild(jenkinsClient, projectUrl, buildId)
+		jenkins.GetBuild(jenkinsClient, projectURL, buildID)
 	},
 }
 
@@ -89,7 +89,7 @@ func init() {
 	jenkinsCmd.MarkPersistentFlagRequired("user")
 	jenkinsCmd.MarkPersistentFlagRequired("api-token")
 
-	buildCmd.Flags().Int64Var(&buildId, "id", 0, "ID of the target build (required), e.g. 22. An value of 0 indicates the most recent build")
+	buildCmd.Flags().Int64Var(&buildID, "id", 0, "ID of the target build (required), e.g. 22. An value of 0 indicates the most recent build")
 	getCmd.AddCommand(buildCmd)
 
 	jenkinsCmd.AddCommand(versionCmd)

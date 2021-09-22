@@ -5,7 +5,7 @@ import (
 	"github.ibm.com/jmuro/tronci/pkg/jenkins"
 )
 
-var pluginListJson string
+var pluginListJSON string
 
 var pluginCmd = &cobra.Command{
 	Use:   "plugin",
@@ -16,7 +16,7 @@ var listPluginsCmd = &cobra.Command{
 	Use:   "list",
 	Short: "List installed Jenkins plugins",
 	Run: func(cmd *cobra.Command, args []string) {
-		jenkinsCreds := jenkins.JenkinsCredentials{
+		jenkinsCreds := jenkins.Credentials{
 			Username: user,
 			APIToken: apiToken,
 		}
@@ -29,18 +29,18 @@ var installPluginsCmd = &cobra.Command{
 	Use:   "install",
 	Short: "List installed Jenkins plugins",
 	Run: func(cmd *cobra.Command, args []string) {
-		jenkinsCreds := jenkins.JenkinsCredentials{
+		jenkinsCreds := jenkins.Credentials{
 			Username: user,
 			APIToken: apiToken,
 		}
 		jenkinsClient = jenkins.NewJenkinsClient(url, jenkinsCreds, enableDebug)
-		jenkins.InstallPlugins(jenkinsClient, pluginListJson)
+		jenkins.InstallPlugins(jenkinsClient, pluginListJSON)
 	},
 }
 
 func init() {
 	usage := `List of plugins to install specified as JSON. For example, "[{"name": "docker-plugin", "version": "1.2.3" }, ...]"`
-	installPluginsCmd.Flags().StringVarP(&pluginListJson, "plugin-list", "j", "", usage)
+	installPluginsCmd.Flags().StringVarP(&pluginListJSON, "plugin-list", "j", "", usage)
 	installPluginsCmd.MarkFlagRequired("plugin-list")
 	pluginCmd.AddCommand(listPluginsCmd)
 	rootCmd.AddCommand(jenkinsCmd)

@@ -89,7 +89,6 @@ func init() {
 	buildCmd.Flags().Int64Var(&buildId, "id", 0, "ID of the target build (required), e.g. 22. An value of 0 indicates the most recent build")
 	getCmd.AddCommand(buildCmd)
 
-	pluginCmd.AddCommand(installPluginsCmd)
 	jenkinsCmd.AddCommand(versionCmd)
 	jenkinsCmd.AddCommand(pluginCmd)
 	jenkinsCmd.AddCommand(getCmd)

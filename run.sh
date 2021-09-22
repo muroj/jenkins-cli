@@ -14,9 +14,9 @@ export JENKINS_API_TOKEN="$(cat ~/.creds/ghenkins-taas)"
 
 #tronci jenkins --user="$JENKINS_USER" --api-token="$JENKINS_API_TOKEN" --url="$JENKINS_URL" get build "$JOB_URL"
 
-#tronci jenkins --user="$JENKINS_USER" --api-token="$JENKINS_API_TOKEN" --url="$JENKINS_URL" version
+tronci jenkins --user="$JENKINS_USER" --api-token="$JENKINS_API_TOKEN" --url="$JENKINS_URL" version
 
-#tronci jenkins --user="$JENKINS_USER" --api-token="$JENKINS_API_TOKEN" --url="$JENKINS_URL" plugin list 
+tronci jenkins --user="$JENKINS_USER" --api-token="$JENKINS_API_TOKEN" --url="$JENKINS_URL" plugin list 
 
 #tronci jenkins --user="$JENKINS_USER" --api-token="$JENKINS_API_TOKEN" --url="$JENKINS_URL" plugin install --plugin-list="$(cat ghenkins-plugins-reduced.json)"
 

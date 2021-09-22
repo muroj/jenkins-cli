@@ -35,19 +35,17 @@ var (
 var jenkinsCmd = &cobra.Command{
 	Use:   "jenkins",
 	Short: "Run a command against a jenkins instance.",
-	PersistentPreRun: func(cmd *cobra.Command, args []string) {
-		jenkinsCreds := jenkins.JenkinsCredentials{
-			Username: user,
-			APIToken: apiToken,
-		}
-		jenkinsClient = jenkins.NewJenkinsClient(url, jenkinsCreds, false)
-	},
 }
 
 var versionCmd = &cobra.Command{
 	Use:   "version",
 	Short: "Output the version of the target jenkins",
 	Run: func(cmd *cobra.Command, args []string) {
+		jenkinsCreds := jenkins.JenkinsCredentials{
+			Username: user,
+			APIToken: apiToken,
+		}
+		jenkinsClient = jenkins.NewJenkinsClient(url, jenkinsCreds, enableDebug)
 		jenkins.GetVersion(jenkinsClient)
 	},
 }
@@ -57,7 +55,7 @@ var getCmd = &cobra.Command{
 	Short: "Get data for a jenkins object.",
 	Args: func(cmd *cobra.Command, args []string) error {
 		if len(args) < 1 {
-			return fmt.Errorf("You must specify the type of resource to get.")
+			return fmt.Errorf("you must specify the type of resource to get")
 		}
 		return nil
 	},
@@ -68,6 +66,11 @@ var buildCmd = &cobra.Command{
 	Short: "Display info for a specified build",
 	Run: func(cmd *cobra.Command, args []string) {
 		projectUrl := args[0]
+		jenkinsCreds := jenkins.JenkinsCredentials{
+			Username: user,
+			APIToken: apiToken,
+		}
+		jenkinsClient = jenkins.NewJenkinsClient(url, jenkinsCreds, enableDebug)
 		jenkins.GetBuild(jenkinsClient, projectUrl, buildId)
 	},
 }
@@ -78,6 +81,7 @@ func init() {
 	jenkinsCmd.PersistentFlags().StringVar(&url, "url", "", "URL of the Jenkins host (required), e.g. \"https://ghenkins.bigdatalab.ibm.com/\"")
 	jenkinsCmd.PersistentFlags().StringVar(&user, "user", "", "Jenkins username (required)")
 	jenkinsCmd.PersistentFlags().StringVar(&apiToken, "api-token", "", "Jenkins API token (required)")
+	jenkinsCmd.PersistentFlags().BoolVarP(&enableDebug, "debug", "v", false, "Enable debug output")
 	jenkinsCmd.MarkPersistentFlagRequired("url")
 	jenkinsCmd.MarkPersistentFlagRequired("user")
 	jenkinsCmd.MarkPersistentFlagRequired("api-token")
@@ -85,7 +89,6 @@ func init() {
 	buildCmd.Flags().Int64Var(&buildId, "id", 0, "ID of the target build (required), e.g. 22. An value of 0 indicates the most recent build")
 	getCmd.AddCommand(buildCmd)
 
-	pluginCmd.AddCommand(installPluginsCmd)
 	jenkinsCmd.AddCommand(versionCmd)
 	jenkinsCmd.AddCommand(pluginCmd)
 	jenkinsCmd.AddCommand(getCmd)

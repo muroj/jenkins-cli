@@ -19,6 +19,8 @@ import (
 	"fmt"
 
 	"github.com/spf13/cobra"
+	"github.com/spf13/pflag"
+	"github.com/spf13/viper"
 	"github.ibm.com/jmuro/tronci/pkg/jenkins"
 )
 
@@ -35,6 +37,9 @@ var (
 var jenkinsCmd = &cobra.Command{
 	Use:   "jenkins",
 	Short: "Run a command against a jenkins instance.",
+	PersistentPreRun: func(cmd *cobra.Command, args []string) {
+		injectViperFlags(cmd)
+	},
 }
 
 var versionCmd = &cobra.Command{
@@ -76,8 +81,6 @@ var buildCmd = &cobra.Command{
 }
 
 func init() {
-
-	jenkinsCmd.Flags().BoolP("toggle", "t", false, "Help message for toggle")
 	jenkinsCmd.PersistentFlags().StringVar(&url, "url", "", "URL of the Jenkins host (required), e.g. \"https://ghenkins.bigdatalab.ibm.com/\"")
 	jenkinsCmd.PersistentFlags().StringVar(&user, "user", "", "Jenkins username (required)")
 	jenkinsCmd.PersistentFlags().StringVar(&apiToken, "api-token", "", "Jenkins API token (required)")
@@ -92,4 +95,16 @@ func init() {
 	jenkinsCmd.AddCommand(versionCmd)
 	jenkinsCmd.AddCommand(pluginCmd)
 	jenkinsCmd.AddCommand(getCmd)
+}
+
+func injectViperFlags(cmd *cobra.Command) {
+	vcfg := viper.Sub("jenkins")
+
+	if vcfg != nil {
+		cmd.Flags().VisitAll(func(f *pflag.Flag) {
+			if !f.Changed && vcfg.IsSet(f.Name) {
+				cmd.Flags().Set(f.Name, vcfg.GetString(f.Name))
+			}
+		})
+	}
 }

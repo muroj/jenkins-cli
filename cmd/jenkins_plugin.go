@@ -42,6 +42,7 @@ func init() {
 	usage := `List of plugins to install specified as JSON. For example, "[{"name": "docker-plugin", "version": "1.2.3" }, ...]"`
 	installPluginsCmd.Flags().StringVarP(&pluginListJSON, "plugin-list", "j", "", usage)
 	installPluginsCmd.MarkFlagRequired("plugin-list")
+	pluginCmd.AddCommand(installPluginsCmd)
 	pluginCmd.AddCommand(listPluginsCmd)
 	rootCmd.AddCommand(jenkinsCmd)
 }

@@ -178,16 +178,13 @@ func InstallPlugins(c *APIClient, pluginListJSON string) error {
 	}
 
 	uc, err := c.Client.GetUpdateCenter(c.Context)
-
 	if err != nil {
 		log.Fatalf("failed to retrieve update center info: %s", err)
 	}
 
-	if uc.RestartRequired() == true {
+	if uc.RestartRequired() {
 		log.Printf("Restart jenkins to finish installing plugins")
 	}
-
-	uc.PrintFailedPlugins()
 
 	return nil
 }

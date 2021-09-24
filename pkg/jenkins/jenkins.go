@@ -129,6 +129,12 @@ func GetVersion(c *APIClient) {
 	fmt.Printf(c.Client.Version)
 }
 
+func SafeRestart(c *APIClient) {
+	if err := c.Client.SafeRestart(c.Context); err != nil {
+		log.Fatalf("restart failed: %s", err)
+	}
+}
+
 func InstallPlugins(c *APIClient, pluginListJSON string) error {
 
 	type pluginDesc struct {

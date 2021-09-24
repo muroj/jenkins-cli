@@ -80,6 +80,19 @@ var buildCmd = &cobra.Command{
 	},
 }
 
+var restartCmd = &cobra.Command{
+	Use:   "restart",
+	Short: "Initiate a safe restart on the target jenkins instance",
+	Run: func(cmd *cobra.Command, args []string) {
+		jenkinsCreds := jenkins.Credentials{
+			Username: user,
+			APIToken: apiToken,
+		}
+		jc := jenkins.NewJenkinsClient(url, jenkinsCreds, enableDebug)
+		jenkins.SafeRestart(jc)
+	},
+}
+
 func init() {
 	jenkinsCmd.PersistentFlags().StringVar(&url, "url", "", "URL of the Jenkins host (required), e.g. \"https://ghenkins.bigdatalab.ibm.com/\"")
 	jenkinsCmd.PersistentFlags().StringVar(&user, "user", "", "Jenkins username (required)")
@@ -95,6 +108,7 @@ func init() {
 	jenkinsCmd.AddCommand(versionCmd)
 	jenkinsCmd.AddCommand(pluginCmd)
 	jenkinsCmd.AddCommand(getCmd)
+	jenkinsCmd.AddCommand(restartCmd)
 }
 
 func injectViperFlags(cmd *cobra.Command) {

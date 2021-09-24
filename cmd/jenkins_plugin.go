@@ -8,7 +8,7 @@ import (
 var pluginListJSON string
 
 var pluginCmd = &cobra.Command{
-	Use:   "plugin",
+	Use:   "plugins",
 	Short: "Manage Jenkins plugins",
 }
 
@@ -27,7 +27,7 @@ var listPluginsCmd = &cobra.Command{
 
 var installPluginsCmd = &cobra.Command{
 	Use:   "install",
-	Short: "List installed Jenkins plugins",
+	Short: "Install Jenkins plugins",
 	Run: func(cmd *cobra.Command, args []string) {
 		jenkinsCreds := jenkins.Credentials{
 			Username: user,

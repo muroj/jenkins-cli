@@ -161,7 +161,7 @@ func InstallPlugins(c *APIClient, pluginListJSON string) error {
 			if semver.Compare(iv, sv) == 0 {
 				log.Printf("%s is already at version: %s", p.Name, iv)
 			} else if semver.Compare(iv, sv) > 0 {
-				log.Printf("more recent version of %s is installed: installed: %s, requeted: %s", p.Name, iv, sv)
+				log.Printf("more recent version of %s is installed: installed: %s, requested: %s", p.Name, iv, p.Version)
 			} else {
 				log.Printf("%s needs updating: %s", p.Name, iv)
 			}

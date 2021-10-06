@@ -25,13 +25,14 @@ import (
 )
 
 var (
-	url           string
-	user          string
-	apiToken      string
-	jobURL        string
-	buildID       int64
-	enableDebug   bool
-	jenkinsClient *jenkins.APIClient
+	url            string
+	user           string
+	apiToken       string
+	jobURL         string
+	buildID        int64
+	enableDebug    bool
+	decryptSecrets bool
+	jenkinsClient  *jenkins.APIClient
 )
 
 var jenkinsCmd = &cobra.Command{
@@ -52,6 +53,19 @@ var versionCmd = &cobra.Command{
 		}
 		jenkinsClient = jenkins.NewJenkinsClient(url, jenkinsCreds, enableDebug)
 		jenkins.GetVersion(jenkinsClient)
+	},
+}
+
+var listCredentialsCmd = &cobra.Command{
+	Use:   "list-system-credentials",
+	Short: "Output the jenkins system credentials as XML",
+	Run: func(cmd *cobra.Command, args []string) {
+		jenkinsCreds := jenkins.Credentials{
+			Username: user,
+			APIToken: apiToken,
+		}
+		jenkinsClient = jenkins.NewJenkinsClient(url, jenkinsCreds, enableDebug)
+		jenkins.ListSystemCredentials(jenkinsClient, decryptSecrets)
 	},
 }
 
@@ -102,10 +116,14 @@ func init() {
 	jenkinsCmd.MarkPersistentFlagRequired("user")
 	jenkinsCmd.MarkPersistentFlagRequired("api-token")
 
-	buildCmd.Flags().Int64Var(&buildID, "id", 0, "ID of the target build (required), e.g. 22. An value of 0 indicates the most recent build")
+	buildCmd.Flags().Int64Var(&buildID, "id", 0, "ID of the target build (required), e.g. 22. A value of 0 indicates the most recent build")
+	buildCmd.MarkFlagRequired("id")
 	getCmd.AddCommand(buildCmd)
 
+	listCredentialsCmd.PersistentFlags().BoolVarP(&decryptSecrets, "decrypt", "d", false, "Output credential secrets in plain text")
+
 	jenkinsCmd.AddCommand(versionCmd)
+	jenkinsCmd.AddCommand(listCredentialsCmd)
 	jenkinsCmd.AddCommand(pluginCmd)
 	jenkinsCmd.AddCommand(getCmd)
 	jenkinsCmd.AddCommand(restartCmd)

@@ -2,6 +2,7 @@ package jenkins
 
 import (
 	"context"
+	"embed"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -14,6 +15,9 @@ import (
 	"github.com/muroj/gojenkins"
 	"golang.org/x/mod/semver"
 )
+
+//go:embed scripts/*
+var global embed.FS
 
 type APIClient struct {
 	Client    *gojenkins.Jenkins
@@ -209,6 +213,30 @@ func ListPlugins(c *APIClient) error {
 	}
 
 	fmt.Printf("%s", pluginsJSON)
+
+	return nil
+}
+
+func ListSystemCredentials(c *APIClient, decrypt bool) error {
+	var scriptPath string
+	if decrypt {
+		scriptPath = "scripts/exportSystemCredentialsDecrypted.groovy"
+	} else {
+		scriptPath = "scripts/exportSystemCredentials.groovy"
+	}
+
+	scriptContent, err := global.ReadFile(scriptPath)
+	if err != nil {
+		log.Fatalf("failed to load groovy script \"%s\": %s", scriptPath, err)
+	}
+
+	resp, err := c.Client.ExecuteScript(c.Context, string(scriptContent))
+
+	if err != nil {
+		return fmt.Errorf("failed to execute groovy script: %s", err)
+	}
+
+	fmt.Print(resp)
 
 	return nil
 }

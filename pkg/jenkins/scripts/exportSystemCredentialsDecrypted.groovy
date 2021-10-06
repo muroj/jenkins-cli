@@ -1,9 +1,8 @@
 /*
 Author: Félix Belzunce Arcos
 Since: January 2021
-Description: Encode in Base64 all the credentials of a Jenkins Master at System level. The script is used to update all the credentials at System level, re-encrypting them in another Jenkins Master. 
-
-The script should be executed in the Script Console. It will output an encoded message containing a flattened list of all the System credentials. Copy that encoded message.
+Description: Encode in Base64 all the credentials of a Jenkins Master at System level. The script is used to update all 
+the credentials at System level, re-encrypting them in another Jenkins Master. 
 
 The encoded message can be used to update the System credentials in a new Jenkins Master. 
 */

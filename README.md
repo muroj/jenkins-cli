@@ -1,15 +1,10 @@
-# TRON CI
+#  Jenkins CLI
 
-A CLI for interacting with various systems maintained by the TRON team. 
-
+A CLI for interacting with Jenkins written in go.
+ 
 ## Build 
 
 ```
 go install
 ```
 
-## Run
-
-```
-tronci jenkins --url my-jenkins.host.com --user jmuro --api-token "$(cat ~/.creds/ghenkins-jmuro)" get build "job/watson-engagement-advisor/job/clu-algorithms-service/job/master" 
-```
